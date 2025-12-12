@@ -59,6 +59,18 @@ const EASING_OPTIONS = [
   { label: 'Overshoot (Back Out)', value: 'back.out(1.7)' },
 ];
 
+const PropSlider = ({ label, value, onChange, isMode, ...props }: any) => {
+    return (
+        <div style={{ position: 'relative', padding: isMode ? '4px' : '0', border: isMode ? `1px dashed ${DesignSystem.Color.Feedback.Warning}` : 'none', borderRadius: '8px', margin: isMode ? '-4px' : '0' }}>
+             <Slider 
+                  label={label} 
+                  value={value} 
+                  onChange={onChange} 
+                  {...props} 
+             />
+        </div>
+    )
+}
 
 const App = () => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -436,21 +448,6 @@ const App = () => {
     return kf?.easing || 'power2.out';
   }
 
-  const PropSlider = ({ label, property, axis, ...props }: any) => {
-      const isMode = selectedKeyframe?.id === selectedId;
-      const val = getControlValue(property, axis);
-      return (
-          <div style={{ position: 'relative', padding: isMode ? '4px' : '0', border: isMode ? `1px dashed ${DesignSystem.Color.Feedback.Warning}` : 'none', borderRadius: '8px', margin: isMode ? '-4px' : '0' }}>
-               <Slider 
-                    label={label} 
-                    value={val} 
-                    onChange={(v) => handleControlChange(property, v, axis)} 
-                    {...props} 
-               />
-          </div>
-      )
-  }
-
   return (
     <div ref={dockConstraintsRef} style={{ width: '100%', height: '100%', position: 'relative', overflow: 'hidden', background: DesignSystem.Color.Base.Surface[1] }}>
       <div ref={containerRef} style={{ width: '100%', height: '100%', zIndex: 0 }} />
@@ -521,25 +518,79 @@ const App = () => {
                 </AnimatePresence>
                 
                 <Group title="TRANSFORM">
-                  <PropSlider label="POS X" property="position" axis={0} min={-10} max={10} step={0.1} />
-                  <PropSlider label="POS Y" property="position" axis={1} min={-10} max={10} step={0.1} />
-                  <PropSlider label="POS Z" property="position" axis={2} min={-10} max={10} step={0.1} />
+                  <PropSlider 
+                    label="POS X" 
+                    value={getControlValue('position', 0)}
+                    onChange={(v: number) => handleControlChange('position', v, 0)}
+                    isMode={selectedKeyframe?.id === selectedId}
+                    min={-10} max={10} step={0.1} 
+                  />
+                  <PropSlider 
+                    label="POS Y" 
+                    value={getControlValue('position', 1)}
+                    onChange={(v: number) => handleControlChange('position', v, 1)}
+                    isMode={selectedKeyframe?.id === selectedId}
+                    min={-10} max={10} step={0.1} 
+                  />
+                  <PropSlider 
+                    label="POS Z" 
+                    value={getControlValue('position', 2)}
+                    onChange={(v: number) => handleControlChange('position', v, 2)}
+                    isMode={selectedKeyframe?.id === selectedId}
+                    min={-10} max={10} step={0.1} 
+                  />
                   
                   {selectedObject.type !== 'audio' && (
                     <>
                       <Divider />
-                      <PropSlider label="ROT X" property="rotation" axis={0} min={-180} max={180} step={1} />
-                      <PropSlider label="ROT Y" property="rotation" axis={1} min={-180} max={180} step={1} />
-                      <PropSlider label="ROT Z" property="rotation" axis={2} min={-180} max={180} step={1} />
+                      <PropSlider 
+                        label="ROT X" 
+                        value={getControlValue('rotation', 0)}
+                        onChange={(v: number) => handleControlChange('rotation', v, 0)}
+                        isMode={selectedKeyframe?.id === selectedId}
+                        min={-180} max={180} step={1} 
+                      />
+                      <PropSlider 
+                        label="ROT Y" 
+                        value={getControlValue('rotation', 1)}
+                        onChange={(v: number) => handleControlChange('rotation', v, 1)}
+                        isMode={selectedKeyframe?.id === selectedId}
+                        min={-180} max={180} step={1} 
+                      />
+                      <PropSlider 
+                        label="ROT Z" 
+                        value={getControlValue('rotation', 2)}
+                        onChange={(v: number) => handleControlChange('rotation', v, 2)}
+                        isMode={selectedKeyframe?.id === selectedId}
+                        min={-180} max={180} step={1} 
+                      />
                     </>
                   )}
 
                   {selectedObject.type !== 'camera' && selectedObject.type !== 'audio' && (
                     <>
                       <Divider />
-                      <PropSlider label="SCALE X" property="scale" axis={0} min={0} max={5} step={0.05} />
-                      <PropSlider label="SCALE Y" property="scale" axis={1} min={0} max={5} step={0.05} />
-                      <PropSlider label="SCALE Z" property="scale" axis={2} min={0} max={5} step={0.05} />
+                      <PropSlider 
+                        label="SCALE X" 
+                        value={getControlValue('scale', 0)}
+                        onChange={(v: number) => handleControlChange('scale', v, 0)}
+                        isMode={selectedKeyframe?.id === selectedId}
+                        min={0} max={5} step={0.05} 
+                      />
+                      <PropSlider 
+                        label="SCALE Y" 
+                        value={getControlValue('scale', 1)}
+                        onChange={(v: number) => handleControlChange('scale', v, 1)}
+                        isMode={selectedKeyframe?.id === selectedId}
+                        min={0} max={5} step={0.05} 
+                      />
+                      <PropSlider 
+                        label="SCALE Z" 
+                        value={getControlValue('scale', 2)}
+                        onChange={(v: number) => handleControlChange('scale', v, 2)}
+                        isMode={selectedKeyframe?.id === selectedId}
+                        min={0} max={5} step={0.05} 
+                      />
                     </>
                   )}
                   
@@ -566,20 +617,44 @@ const App = () => {
                                 <Input type="text" value={getControlValue('color')} onChange={(e) => handleControlChange('color', e.target.value)} style={{ flex: 1 }} />
                            </div>
                        </div>
-                      <PropSlider label="METALNESS" property="metalness" min={0} max={1} step={0.01} />
-                      <PropSlider label="ROUGHNESS" property="roughness" min={0} max={1} step={0.01} />
+                      <PropSlider 
+                        label="METALNESS" 
+                        value={getControlValue('metalness')}
+                        onChange={(v: number) => handleControlChange('metalness', v)}
+                        isMode={selectedKeyframe?.id === selectedId}
+                        min={0} max={1} step={0.01} 
+                      />
+                      <PropSlider 
+                        label="ROUGHNESS" 
+                        value={getControlValue('roughness')}
+                        onChange={(v: number) => handleControlChange('roughness', v)}
+                        isMode={selectedKeyframe?.id === selectedId}
+                        min={0} max={1} step={0.01} 
+                      />
                     </Group>
                 )}
 
                 {(selectedObject.type === 'audio' || selectedObject.type === 'video') && (
                     <Group title="AUDIO" icon={<SpeakerHigh />}>
-                        <PropSlider label="VOLUME" property="volume" min={0} max={1} step={0.05} />
+                        <PropSlider 
+                            label="VOLUME" 
+                            value={getControlValue('volume')}
+                            onChange={(v: number) => handleControlChange('volume', v)}
+                            isMode={selectedKeyframe?.id === selectedId}
+                            min={0} max={1} step={0.05} 
+                        />
                     </Group>
                 )}
 
                 {(selectedObject.type === 'video' || selectedObject.type === 'plane') && (
                     <Group title="DISTORTION" icon={<Cylinder />}>
-                        <PropSlider label="CYLINDER WRAP" property="curvature" min={-0.5} max={0.5} step={0.01} />
+                        <PropSlider 
+                            label="CYLINDER WRAP" 
+                            value={getControlValue('curvature')}
+                            onChange={(v: number) => handleControlChange('curvature', v)}
+                            isMode={selectedKeyframe?.id === selectedId}
+                            min={-0.5} max={0.5} step={0.01} 
+                        />
                     </Group>
                 )}
 

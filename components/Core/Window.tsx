@@ -1,6 +1,7 @@
+
 import React, { useRef, useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useDragControls } from 'framer-motion';
 import { DotsThree, ArrowCounterClockwise, ArrowClockwise, CornersOut, Minus, X } from '@phosphor-icons/react';
 import { DesignSystem } from '../../theme';
 import { Button } from './Primitives';
@@ -92,6 +93,7 @@ export const Window: React.FC<WindowProps> = ({
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const [showMenu, setShowMenu] = useState(false);
   const [menuRect, setMenuRect] = useState<DOMRect | null>(null);
+  const dragControls = useDragControls();
 
   const handleMenuClick = () => {
     if (menuButtonRef.current) {
@@ -114,6 +116,8 @@ export const Window: React.FC<WindowProps> = ({
           exit={{ opacity: 0, scale: 0.95, y: 10, filter: 'blur(10px)' }}
           transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
           drag
+          dragListener={false}
+          dragControls={dragControls}
           dragMomentum={false}
           style={{
             position: 'absolute',
@@ -134,9 +138,7 @@ export const Window: React.FC<WindowProps> = ({
             overflow: 'hidden',
             zIndex: 100,
           }}
-          onPointerDown={() => {
-             // Simple z-index bump logic could go here if managed globally
-          }}
+          onPointerDown={(e) => e.stopPropagation()}
         >
           {/* Header */}
           <div
@@ -150,10 +152,12 @@ export const Window: React.FC<WindowProps> = ({
               borderBottom: `1px solid ${DesignSystem.Color.Base.Border[1]}`,
               cursor: 'grab',
               flexShrink: 0,
-              background: 'rgba(255,255,255,0.01)'
+              background: 'rgba(255,255,255,0.01)',
+              touchAction: 'none'
             }}
             onPointerDown={(e) => {
-               if ((e.target as HTMLElement).tagName === 'BUTTON') e.stopPropagation();
+               if ((e.target as HTMLElement).closest('button')) return;
+               dragControls.start(e);
             }}
           >
              <div style={{ display: 'flex', alignItems: 'center', gap: DesignSystem.Space(2) }}>
