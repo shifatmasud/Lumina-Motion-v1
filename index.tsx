@@ -108,7 +108,8 @@ const App = () => {
       backgroundColor: '#000000',
       bloom: { enabled: false, strength: 0.2, threshold: 0.85, radius: 0.5 },
       vignette: { enabled: false, offset: 1.0, darkness: 1.0 },
-      accentColor: ACCENT_COLORS[2]
+      accentColor: ACCENT_COLORS[2],
+      showGrid: true,
   });
   
   // Timeline State
@@ -145,8 +146,8 @@ const App = () => {
   }, [objects]);
   
   useEffect(() => {
-    if (engineRef.current) engineRef.current.setTime(currentTime, objects);
-  }, [currentTime, objects]);
+    if (engineRef.current) engineRef.current.setTime(currentTime, objects, isPlaying);
+  }, [currentTime, objects, isPlaying]);
 
   useEffect(() => {
     if (engineRef.current) engineRef.current.updatePostProcessing(globalSettings);
@@ -179,6 +180,11 @@ const App = () => {
   }, [isPlaying, totalDuration]);
 
   // --- Actions ---
+  const handleTogglePlay = () => {
+      engineRef.current?.resumeAudioContext();
+      setIsPlaying(!isPlaying);
+  };
+    
   const handleAddObject = (type: SceneObject['type'], url?: string, width?: number, height?: number) => {
     const newObj: SceneObject = {
       id: uuidv4(), type,
@@ -189,8 +195,9 @@ const App = () => {
       metalness: type === 'mesh' ? 0.2 : undefined,
       roughness: type === 'mesh' ? 0.1 : undefined,
       opacity: 1.0,
-      volume: type === 'audio' ? 1.0 : undefined,
+      volume: type === 'audio' || type === 'video' ? 1.0 : undefined,
       chromaKey: type === 'video' ? { enabled: false, color: '#00ff00', similarity: 0.1, smoothness: 0.1 } : undefined,
+      loop: type === 'video' ? true : undefined,
       startTime: Math.floor(currentTime), duration: 5, animations: [],
       introTransition: { ...defaultTransition },
       outroTransition: { ...defaultTransition },
@@ -219,16 +226,19 @@ const App = () => {
       const time = Math.max(0, currentTime - o.startTime);
 
       const newValues: TimelineKeyframe['values'] = {
-        position: [...o.position],
-        rotation: [...o.rotation],
+        // FIX: Explicitly cast the spread array to a tuple to match the type definition.
+        position: [...o.position] as [number, number, number],
+        // FIX: Explicitly cast the spread array to a tuple to match the type definition.
+        rotation: [...o.rotation] as [number, number, number],
       };
       
-      if (o.type !== 'camera') newValues.scale = [...o.scale];
+      // FIX: Explicitly cast the spread array to a tuple to match the type definition.
+      if (o.type !== 'camera') newValues.scale = [...o.scale] as [number, number, number];
       if (o.type === 'mesh') {
         newValues.metalness = o.metalness;
         newValues.roughness = o.roughness;
       }
-      if (o.type === 'audio') newValues.volume = o.volume;
+      if (o.type === 'audio' || o.type === 'video') newValues.volume = o.volume;
       newValues.opacity = o.opacity;
 
       const existingIndex = newAnimations.findIndex(kf => Math.abs(kf.time - time) < 0.01);
@@ -564,10 +574,19 @@ const App = () => {
                       <PropSlider label="ROUGHNESS" property="roughness" min={0} max={1} step={0.01} />
                     </Group>
                 )}
-                
-                {selectedObject.type === 'audio' && (
+
+                {(selectedObject.type === 'audio' || selectedObject.type === 'video') && (
                     <Group title="AUDIO" icon={<SpeakerHigh />}>
-                        <PropSlider label="VOLUME" property="volume" min={0} max={2} step={0.1} />
+                        <PropSlider label="VOLUME" property="volume" min={0} max={1} step={0.05} />
+                    </Group>
+                )}
+
+                {selectedObject.type === 'video' && (
+                    <Group title="PLAYBACK" icon={<FilmStrip />}>
+                        <Toggle label="LOOP" value={selectedObject.loop ?? true} onChange={(v) => handleUpdateObject(selectedObject.id, { loop: v })} />
+                        <div style={{ ...DesignSystem.Type.Label.S, fontSize: '10px', color: DesignSystem.Color.Base.Content[3], padding: '4px', textAlign: 'center', background: DesignSystem.Color.Base.Surface[2], borderRadius: DesignSystem.Effect.Radius.S }}>
+                            Playback is controlled by the main timeline. Audio requires user interaction to start.
+                        </div>
                     </Group>
                 )}
 
@@ -634,6 +653,8 @@ const App = () => {
                         </div>
                     </div>
                     
+                    <Toggle label="SHOW GRID" value={globalSettings.showGrid} onChange={(v) => setGlobalSettings(g => ({ ...g, showGrid: v }))} />
+
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                         <span style={DesignSystem.Type.Label.S}>ACCENT COLOR</span>
                         <div style={{ display: 'flex', gap: '8px' }}>
@@ -699,7 +720,7 @@ const App = () => {
             selectedId={selectedId} 
             onSelect={(id) => { setSelectedId(id); setShowProperties(true); }} 
             isPlaying={isPlaying} 
-            onTogglePlay={() => setIsPlaying(!isPlaying)} 
+            onTogglePlay={handleTogglePlay} 
             currentTime={currentTime} 
             setCurrentTime={setCurrentTime} 
             totalDuration={totalDuration} 

@@ -41,6 +41,7 @@ export interface SceneObject {
   opacity?: number;
   volume?: number; // For audio
   fov?: number; // For camera
+  loop?: boolean; // For video/audio
   chromaKey?: {
     enabled: boolean;
     color: string;
@@ -59,6 +60,7 @@ export interface GlobalSettings {
   bloom: { enabled: boolean; strength: number; threshold: number; radius: number; };
   vignette: { enabled: boolean; offset: number; darkness: number; };
   accentColor: string;
+  showGrid: boolean;
 }
 
 const chromaKeyVertexShader = `
@@ -75,13 +77,18 @@ uniform vec3 keyColor;
 uniform float similarity;
 uniform float smoothness;
 uniform float opacity;
+uniform bool chromaKeyEnabled;
 varying vec2 vUv;
 
 void main() {
   vec4 texColor = texture2D(map, vUv);
-  float d = length(texColor.rgb - keyColor);
-  float alpha = smoothstep(similarity, similarity + smoothness, d);
-  gl_FragColor = vec4(texColor.rgb, texColor.a * alpha * opacity);
+  float finalAlpha = texColor.a * opacity;
+  if (chromaKeyEnabled) {
+    float d = length(texColor.rgb - keyColor);
+    float alpha = smoothstep(similarity, similarity + smoothness, d);
+    finalAlpha *= alpha;
+  }
+  gl_FragColor = vec4(texColor.rgb, finalAlpha);
 }
 `;
 
@@ -94,6 +101,7 @@ export class Engine {
   raycaster: THREE.Raycaster;
   pointer: THREE.Vector2;
   objectsMap: Map<string, THREE.Object3D>;
+  mediaElements: Map<string, HTMLVideoElement>;
   composer: EffectComposer;
   bloomPass: UnrealBloomPass;
   vignettePass: ShaderPass;
@@ -101,6 +109,7 @@ export class Engine {
   gltfLoader: GLTFLoader;
   audioLoader: THREE.AudioLoader;
   rimLight: THREE.SpotLight;
+  gridHelper: THREE.GridHelper;
   
   onSelect?: (id: string | null) => void;
 
@@ -108,6 +117,7 @@ export class Engine {
     this.container = container;
     this.onSelect = onSelect;
     this.objectsMap = new Map();
+    this.mediaElements = new Map();
     this.pointer = new THREE.Vector2();
     this.raycaster = new THREE.Raycaster();
     this.gltfLoader = new GLTFLoader();
@@ -119,8 +129,8 @@ export class Engine {
     this.scene.fog = new THREE.FogExp2('#000000', 0.08);
 
     // Grid - Subtle dark grid
-    const gridHelper = new THREE.GridHelper(30, 30, 0x222222, 0x111111);
-    this.scene.add(gridHelper);
+    this.gridHelper = new THREE.GridHelper(30, 30, 0x222222, 0x111111);
+    this.scene.add(this.gridHelper);
 
     // Camera
     this.camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -176,6 +186,12 @@ export class Engine {
     this.renderer.domElement.addEventListener('pointerdown', this.onPointerDown.bind(this));
     
     this.animate();
+  }
+  
+  resumeAudioContext() {
+      if (this.audioListener.context.state === 'suspended') {
+          this.audioListener.context.resume();
+      }
   }
 
   onResize() {
@@ -247,39 +263,49 @@ export class Engine {
        }
        const geometry = new THREE.PlaneGeometry(planeWidth, planeHeight);
        let material;
+       let videoElement: HTMLVideoElement | null = null;
        
        if (objData.url) {
            let texture;
            if (objData.type === 'video') {
                const video = document.createElement('video');
-               video.src = objData.url; video.loop = true; video.muted = true; video.crossOrigin = 'anonymous'; video.play();
+               video.src = objData.url;
+               video.loop = objData.loop ?? true;
+               video.crossOrigin = 'anonymous';
+               video.playsInline = true;
+               video.muted = false; // Ensure video element is not muted. Volume is controlled by THREE.Audio
+               videoElement = video;
+               this.mediaElements.set(objData.id, video);
                texture = new THREE.VideoTexture(video);
            } else {
                texture = new THREE.TextureLoader().load(objData.url);
            }
            texture.colorSpace = THREE.SRGBColorSpace;
-
-           if (objData.chromaKey?.enabled) {
-               material = new THREE.ShaderMaterial({
-                   uniforms: {
-                       map: { value: texture },
-                       keyColor: { value: new THREE.Color(objData.chromaKey.color) },
-                       similarity: { value: objData.chromaKey.similarity },
-                       smoothness: { value: objData.chromaKey.smoothness },
-                       opacity: { value: objData.opacity ?? 1.0 }
-                   },
-                   vertexShader: chromaKeyVertexShader,
-                   fragmentShader: chromaKeyFragmentShader,
-                   transparent: true,
-                   side: THREE.DoubleSide
-               });
-           } else {
-                material = new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide, transparent: true, opacity: objData.opacity ?? 1.0 });
-           }
+           
+           material = new THREE.ShaderMaterial({
+               uniforms: {
+                   map: { value: texture },
+                   keyColor: { value: new THREE.Color(objData.chromaKey?.color || '#00ff00') },
+                   similarity: { value: objData.chromaKey?.similarity || 0.1 },
+                   smoothness: { value: objData.chromaKey?.smoothness || 0.1 },
+                   opacity: { value: objData.opacity ?? 1.0 },
+                   chromaKeyEnabled: { value: objData.chromaKey?.enabled || false }
+               },
+               vertexShader: chromaKeyVertexShader,
+               fragmentShader: chromaKeyFragmentShader,
+               transparent: true,
+               side: THREE.DoubleSide
+           });
        } else {
            material = new THREE.MeshBasicMaterial({ color: '#333', side: THREE.DoubleSide, transparent: true, opacity: objData.opacity ?? 1.0 });
        }
        mesh = new THREE.Mesh(geometry, material);
+
+       if (videoElement) {
+           const sound = new THREE.Audio(this.audioListener);
+           sound.setMediaElementSource(videoElement);
+           mesh.add(sound);
+       }
     } else if (objData.type === 'glb') {
         mesh = new THREE.Group();
         // Placeholder box while loading
@@ -311,7 +337,6 @@ export class Engine {
                 sound.setRefDistance(2);
                 sound.setLoop(true);
                 sound.setVolume(objData.volume ?? 1);
-                // sound.play(); // Auto-play logic handled in setTime ideally, but restricted by browser policy usually.
             });
             mesh.add(sound);
         }
@@ -324,7 +349,7 @@ export class Engine {
     return mesh;
   }
 
-  setTime(time: number, objects: SceneObject[]) {
+  setTime(time: number, objects: SceneObject[], isPlaying: boolean) {
     if (!this.scene) return;
     
     objects.forEach(objData => {
@@ -334,29 +359,51 @@ export class Engine {
       const isVisible = time >= objData.startTime && time <= objData.startTime + objData.duration;
       obj3d.visible = isVisible;
       
-      // Handle Audio Playback State (Simple version)
-      if (objData.type === 'audio') {
-          const sound = obj3d.children.find(c => c instanceof THREE.PositionalAudio) as THREE.PositionalAudio;
-          if (sound && sound.buffer) {
-             if (isVisible && !sound.isPlaying) {
-                 // Calculate offset
-                 const offset = (time - objData.startTime) % sound.buffer.duration;
-                 sound.offset = offset;
-                 try { sound.play(); } catch(e) {}
-             } else if (!isVisible && sound.isPlaying) {
-                 sound.stop();
-             }
-             if (sound.isPlaying) {
-                 sound.setVolume(objData.volume ?? 1);
-             }
-          }
-      }
+      const sound = obj3d.children.find(c => c instanceof THREE.Audio || c instanceof THREE.PositionalAudio) as THREE.Audio | THREE.PositionalAudio;
 
+      // Handle Video with Duo Mode (Scrub vs Play)
+      if (objData.type === 'video') {
+        const video = this.mediaElements.get(objData.id);
+        if (video) {
+            if (!isVisible) {
+                if (!video.paused) video.pause();
+            } else {
+                const localTime = time - objData.startTime;
+                
+                if (isPlaying) { // PLAY MODE
+                    if (video.paused) {
+                        // Resync time before playing if it drifted while paused/scrubbed
+                        if (Math.abs(video.currentTime - localTime) > 0.2) {
+                            video.currentTime = localTime;
+                        }
+                        video.play().catch(e => console.warn("Video autoplay failed.", e));
+                    }
+                } else { // SCRUB MODE
+                    if (!video.paused) video.pause();
+                    if (Math.abs(video.currentTime - localTime) > 0.15) {
+                        video.currentTime = localTime;
+                    }
+                }
+            }
+        }
+      } 
+      // Handle Standalone Audio
+      else if (objData.type === 'audio' && sound instanceof THREE.PositionalAudio) {
+        if (sound.buffer) {
+          if (isVisible && isPlaying && !sound.isPlaying) {
+            const offset = (time - objData.startTime) % sound.buffer.duration;
+            sound.offset = offset;
+            sound.play();
+          } else if ((!isVisible || !isPlaying) && sound.isPlaying) {
+            sound.pause();
+          }
+        }
+      }
+      
       if (!isVisible) return;
 
       const localTime = time - objData.startTime;
 
-      // 1. Reset transforms to base state
       obj3d.position.fromArray(objData.position);
       obj3d.rotation.fromArray(objData.rotation.map(d => THREE.MathUtils.degToRad(d)));
       obj3d.scale.fromArray(objData.scale);
@@ -377,7 +424,6 @@ export class Engine {
           }
       }
       
-      // 2. Apply keyframe animations
       if (objData.animations && objData.animations.length > 0) {
         const keyframes = [...objData.animations];
         const baseState: TimelineKeyframe['values'] = {
@@ -425,13 +471,21 @@ export class Engine {
             if (mat.uniforms?.opacity) mat.uniforms.opacity.value = opacity;
         }
 
-        if (objData.type === 'audio') {
-            const sound = obj3d.children.find(c => c instanceof THREE.PositionalAudio) as THREE.PositionalAudio;
-            if (sound && interpolatedValues.volume !== undefined) sound.setVolume(interpolatedValues.volume);
+        const finalVolume = interpolatedValues.volume ?? objData.volume ?? 1.0;
+        if ((objData.type === 'audio' || objData.type === 'video') && sound) {
+            if (sound.getVolume() !== finalVolume) {
+                sound.setVolume(finalVolume);
+            }
+        }
+      } else {
+        if ((objData.type === 'audio' || objData.type === 'video') && sound) {
+            const baseVolume = objData.volume ?? 1.0;
+            if (sound.getVolume() !== baseVolume) {
+                sound.setVolume(baseVolume);
+            }
         }
       }
 
-      // 3. Apply Intro/Outro transitions
       const intro = objData.introTransition;
       if (intro && intro.type === 'custom') {
         const introTime = localTime - intro.delay;
@@ -472,7 +526,6 @@ export class Engine {
           }
       }
 
-      // Camera Override Logic
       if (objData.type === 'camera') {
         this.camera.position.copy(obj3d.position);
         this.camera.rotation.copy(obj3d.rotation);
@@ -504,15 +557,28 @@ export class Engine {
 
         unseen.delete(objData.id);
 
-        // Update basic material props that don't need frame-by-frame update
         if (obj3d instanceof THREE.Mesh && obj3d.material instanceof THREE.MeshPhysicalMaterial) {
             obj3d.material.color.set(objData.color || '#ffffff');
         }
+
+        if (objData.type === 'video') {
+            const video = this.mediaElements.get(objData.id);
+            if (video && video.loop !== (objData.loop ?? true)) {
+                video.loop = objData.loop ?? true;
+            }
+        }
         
-        if (obj3d instanceof THREE.Mesh && obj3d.material instanceof THREE.ShaderMaterial && objData.chromaKey) {
-             obj3d.material.uniforms.keyColor.value.set(objData.chromaKey.color);
-             obj3d.material.uniforms.similarity.value = objData.chromaKey.similarity;
-             obj3d.material.uniforms.smoothness.value = objData.chromaKey.smoothness;
+        if (obj3d instanceof THREE.Mesh && obj3d.material instanceof THREE.ShaderMaterial && (objData.type === 'plane' || objData.type === 'video')) {
+            const chromaKey = objData.chromaKey;
+            const uniforms = obj3d.material.uniforms;
+
+            uniforms.chromaKeyEnabled.value = chromaKey?.enabled || false;
+            
+            if (chromaKey) {
+                uniforms.keyColor.value.set(chromaKey.color);
+                uniforms.similarity.value = chromaKey.similarity;
+                uniforms.smoothness.value = chromaKey.smoothness;
+            }
         }
     });
 
@@ -520,6 +586,16 @@ export class Engine {
         const obj = this.objectsMap.get(id);
         if (obj && obj.parent) { obj.parent.remove(obj); }
         this.objectsMap.delete(id);
+
+        if (this.mediaElements.has(id)) {
+            const video = this.mediaElements.get(id);
+            if(video) {
+                video.pause();
+                video.removeAttribute('src');
+                video.load();
+            }
+            this.mediaElements.delete(id);
+        }
     });
   }
 
@@ -535,6 +611,8 @@ export class Engine {
       this.vignettePass.uniforms['darkness'].value = settings.vignette.darkness;
       
       this.rimLight.color.set(settings.accentColor);
+      
+      this.gridHelper.visible = settings.showGrid;
   }
 
   animate() {
