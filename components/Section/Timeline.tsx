@@ -167,7 +167,7 @@ const TimelineItem: React.FC<{
     <Reorder.Item 
         value={obj} 
         id={obj.id}
-        drag={!isLocked}
+        // Removed drag={!isLocked} - Reorder.Item should be solely controlled by dragControls when dragListener is false.
         style={{ listStyle: 'none', position: 'relative', height: '48px', width: '100%' }}
         dragListener={false}
         dragControls={dragControls}
@@ -196,8 +196,19 @@ const TimelineItem: React.FC<{
         >
             <div style={{ display: 'flex', alignItems: 'center', gap: DesignSystem.Space(2), overflow: 'hidden', flex: 1 }}>
                 <motion.div 
-                    onPointerDown={(e) => !isLocked && dragControls.start(e)}
-                    style={{ cursor: isLocked ? 'default' : 'grab', color: DesignSystem.Color.Base.Content[3], padding: '4px', opacity: isLocked ? 0.3 : 1 }}
+                    // Explicitly prevent default browser scroll behavior and stop event propagation
+                    onPointerDown={(e) => { 
+                        e.stopPropagation(); 
+                        e.preventDefault();
+                        if (!isLocked) dragControls.start(e); 
+                    }}
+                    style={{ 
+                        cursor: isLocked ? 'default' : 'grab', 
+                        color: DesignSystem.Color.Base.Content[3], 
+                        padding: '4px', 
+                        opacity: isLocked ? 0.3 : 1,
+                        touchAction: 'none' // Explicitly disable touch-scrolling on this element
+                    }}
                     className="drag-handle"
                     whileHover={{ color: DesignSystem.Color.Base.Content[1] }}
                 >
