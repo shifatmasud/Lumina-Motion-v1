@@ -1,13 +1,18 @@
-
 {
   "imports": {
-    "react": "https://esm.sh/react@18.2.0?dev",
-    "react-dom/client": "https://esm.sh/react-dom@18.2.0/client?dev",
-    "@google/genai": "https://esm.sh/@google/genai@0.7.0",
-    "three": "https://esm.sh/three@0.160.0",
-    "three/addons/": "https://esm.sh/three@0.160.0/examples/jsm/",
-    "gsap": "https://esm.sh/gsap@3.12.5",
-    "framer-motion": "https://esm.sh/framer-motion@11.0.3",
-    "@phosphor-icons/react": "https://esm.sh/@phosphor-icons/react@2.0.15"
+    "react": "https://esm.sh/react@18.2.0",
+    "react-dom/client": "https://esm.sh/react-dom@18.2.0/client?deps=react@18.2.0",
+    "three": "https://esm.sh/three@0.180.0",
+    "three/examples/jsm/controls/OrbitControls": "https://esm.sh/three@0.180.0/examples/jsm/controls/OrbitControls?deps=three@0.180.0",
+    "three/examples/jsm/loaders/GLTFLoader": "https://esm.sh/three@0.180.0/examples/jsm/loaders/GLTFLoader?deps=three@0.180.0",
+    "three/examples/jsm/postprocessing/EffectComposer": "https://esm.sh/three@0.180.0/examples/jsm/postprocessing/EffectComposer?deps=three@0.180.0",
+    "three/examples/jsm/postprocessing/RenderPass": "https://esm.sh/three@0.180.0/examples/jsm/postprocessing/RenderPass?deps=three@0.180.0",
+    "three/examples/jsm/postprocessing/ShaderPass": "https://esm.sh/three@0.180.0/examples/jsm/postprocessing/ShaderPass?deps=three@0.180.0",
+    "three/examples/jsm/postprocessing/UnrealBloomPass": "https://esm.sh/three@0.180.0/examples/jsm/postprocessing/UnrealBloomPass?deps=three@0.180.0",
+    "three/examples/jsm/shaders/VignetteShader": "https://esm.sh/three@0.180.0/examples/jsm/shaders/VignetteShader?deps=three@0.180.0",
+    "framer-motion": "https://esm.sh/framer-motion@12.23.24?deps=react@18.2.0",
+    "gsap": "https://esm.sh/gsap@3.13.0",
+    "@phosphor-icons/react": "https://esm.sh/@phosphor-icons/react@2.1.0?deps=react@18.2.0",
+    "uuid": "https://esm.sh/uuid@9.0.1"
   }
 }

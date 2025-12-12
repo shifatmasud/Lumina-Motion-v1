@@ -1,11 +1,16 @@
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Comic+Neue:wght@400;700&family=Inter:wght@400;500;600&family=Victor+Mono:wght@400;500&display=swap');
 
 :root {
-  --font-display: 'Bebas Neue', sans-serif;
-  --font-body: 'Inter', sans-serif;
+  --font-display: 'Bebas Neue', cursive;
+  --font-expressive: 'Comic Neue', cursive;
   --font-code: 'Victor Mono', monospace;
+  --font-body: 'Inter', sans-serif;
   
-  --bg-color: #050505;
-  --text-color: #EDEDED;
+  /* Default Theme */
+  --accent-surface: #5B50FF;
+  --accent-surface-dim: #4038B5;
+  --accent-content: #FFFFFF;
+  --accent-glow: rgba(91, 80, 255, 0.4);
 }
 
 * {
@@ -14,19 +19,20 @@
   padding: 0;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  user-select: none; /* App-like feel */
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 body {
-  background-color: var(--bg-color);
-  color: var(--text-color);
   font-family: var(--font-body);
+  background-color: #050505;
+  color: #e0e0e0;
   overflow: hidden;
   width: 100vw;
   height: 100vh;
 }
 
-/* Custom Scrollbar for Panels */
+/* Scrollbar Styling */
 ::-webkit-scrollbar {
   width: 4px;
   height: 4px;
@@ -35,11 +41,11 @@ body {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.15);
-  border-radius: 4px;
+  background: #333;
+  border-radius: 2px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.3);
+  background: #555;
 }
 
 canvas {

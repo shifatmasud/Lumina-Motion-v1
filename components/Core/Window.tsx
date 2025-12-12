@@ -1,161 +1,277 @@
-
-import React from 'react';
-import { motion, AnimatePresence, useDragControls } from 'framer-motion';
-import { DotsThree, ArrowUUpLeft, ArrowUUpRight } from '@phosphor-icons/react';
-import { Theme } from '../../theme.tsx';
-import { Button, DropdownMenu } from './Primitives.tsx';
+import React, { useRef, useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
+import { motion, AnimatePresence } from 'framer-motion';
+import { DotsThree, ArrowCounterClockwise, ArrowClockwise, CornersOut, Minus, X } from '@phosphor-icons/react';
+import { DesignSystem } from '../../theme';
+import { Button } from './Primitives';
 
 interface WindowProps {
   id: string;
   title: string;
   isOpen: boolean;
   onClose: () => void;
-  children?: React.ReactNode;
-  initialPos?: { x: number; y: number };
-  size?: { w: number | string; h: number | string };
+  children: React.ReactNode;
+  width?: number;
+  height?: number;
   onUndo?: () => void;
   onRedo?: () => void;
-  canUndo?: boolean;
-  canRedo?: boolean;
 }
 
-export const Window = ({ 
-  id, 
-  title, 
-  isOpen, 
-  onClose, 
-  children, 
-  initialPos = { x: 20, y: 20 }, 
-  size = { w: 360, h: 500 },
-  onUndo,
-  onRedo,
-  canUndo = false,
-  canRedo = false
-}: WindowProps) => {
+// Context Menu Portal
+const ContextMenu: React.FC<{
+  rect: DOMRect;
+  onClose: () => void;
+}> = ({ rect, onClose }) => {
+  return createPortal(
+    <>
+      <div 
+        onClick={onClose}
+        style={{ position: 'fixed', inset: 0, zIndex: 10000 }} 
+      />
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95, y: -5 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: -5 }}
+        transition={{ duration: 0.1 }}
+        style={{
+          position: 'fixed',
+          top: rect.bottom + 8,
+          left: rect.left,
+          width: '160px',
+          background: DesignSystem.Color.Base.Surface[2],
+          border: `1px solid ${DesignSystem.Color.Base.Border[2]}`,
+          borderRadius: DesignSystem.Effect.Radius.M,
+          padding: '6px',
+          zIndex: 10001,
+          boxShadow: '0 10px 30px rgba(0,0,0,0.5)',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '2px'
+        }}
+      >
+        {['Reset Position', 'Minimize', 'Snap to Grid', 'Help'].map(item => (
+            <div key={item} 
+                onClick={onClose}
+                style={{ 
+                    padding: '8px 12px', 
+                    ...DesignSystem.Type.Label.S, 
+                    color: DesignSystem.Color.Base.Content[2],
+                    cursor: 'pointer',
+                    borderRadius: DesignSystem.Effect.Radius.S,
+                    transition: '0.1s'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = DesignSystem.Color.Base.Surface[3];
+                  e.currentTarget.style.color = DesignSystem.Color.Base.Content[1];
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'transparent';
+                  e.currentTarget.style.color = DesignSystem.Color.Base.Content[2];
+                }}
+            >
+                {item}
+            </div>
+        ))}
+      </motion.div>
+    </>,
+    document.body
+  );
+};
 
-  const dragControls = useDragControls();
-  const constrainedWidth = typeof size.w === 'number' ? Math.min(size.w, 400) : size.w;
-  const constrainedHeight = typeof size.h === 'number' ? Math.min(size.h, 600) : size.h;
+export const Window: React.FC<WindowProps> = ({
+  id,
+  title,
+  isOpen,
+  onClose,
+  children,
+  width = 360,
+  height = 500,
+  onUndo,
+  onRedo
+}) => {
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const [showMenu, setShowMenu] = useState(false);
+  const [menuRect, setMenuRect] = useState<DOMRect | null>(null);
+
+  const handleMenuClick = () => {
+    if (menuButtonRef.current) {
+      setMenuRect(menuButtonRef.current.getBoundingClientRect());
+      setShowMenu(!showMenu);
+    }
+  };
+
+  useEffect(() => {
+    if (showMenu) setShowMenu(false);
+  }, [isOpen]);
 
   return (
     <AnimatePresence>
       {isOpen && (
         <motion.div
           key={id}
-          initial={{ opacity: 0, scale: 0.95, y: 15, filter: 'blur(10px)' }}
+          initial={{ opacity: 0, scale: 0.95, y: 20, filter: 'blur(10px)' }}
           animate={{ opacity: 1, scale: 1, y: 0, filter: 'blur(0px)' }}
-          exit={{ opacity: 0, scale: 0.95, filter: 'blur(10px)' }}
-          transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+          exit={{ opacity: 0, scale: 0.95, y: 10, filter: 'blur(10px)' }}
+          transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
           drag
-          dragListener={false}
-          dragControls={dragControls}
           dragMomentum={false}
           style={{
             position: 'absolute',
-            left: initialPos.x,
-            top: initialPos.y,
-            width: constrainedWidth,
-            height: constrainedHeight,
-            maxWidth: '400px',
-            maxHeight: '600px',
-            background: Theme.Color.Effect.Glass,
-            backdropFilter: Theme.Effect.Blur.Panel,
-            borderRadius: Theme.Effect.Radius.L,
-            boxShadow: Theme.Effect.Shadow.Window,
-            border: `1px solid ${Theme.Color.Effect.Border}`,
+            left: `calc(50vw - ${width / 2}px)`,
+            top: `calc(50vh - ${height / 2}px)`,
+            width: width,
+            height: height,
+            maxWidth: '90vw',
+            maxHeight: '80vh',
+            backgroundColor: DesignSystem.Color.Base.Surface['3b'],
+            backdropFilter: 'blur(32px)',
+            WebkitBackdropFilter: 'blur(32px)',
+            borderRadius: DesignSystem.Effect.Radius.L,
+            border: `1px solid ${DesignSystem.Color.Base.Border[1]}`,
+            boxShadow: DesignSystem.Effect.Shadow.Depth,
             display: 'flex',
             flexDirection: 'column',
-            zIndex: Theme.Layout.Z.Window,
-            overflow: 'hidden'
+            overflow: 'hidden',
+            zIndex: 100,
+          }}
+          onPointerDown={() => {
+             // Simple z-index bump logic could go here if managed globally
           }}
         >
           {/* Header */}
-          <div 
-            onPointerDown={(e) => dragControls.start(e)}
+          <div
+            className="window-header"
             style={{
-              height: '52px',
+              height: '48px',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              padding: `0 ${Theme.Space.M}px`,
-              borderBottom: `1px solid ${Theme.Color.Effect.Border}`,
+              padding: `0 ${DesignSystem.Space(2)} 0 ${DesignSystem.Space(3)}`,
+              borderBottom: `1px solid ${DesignSystem.Color.Base.Border[1]}`,
               cursor: 'grab',
-              userSelect: 'none',
-              background: 'rgba(255,255,255,0.02)',
-              flexShrink: 0
+              flexShrink: 0,
+              background: 'rgba(255,255,255,0.01)'
+            }}
+            onPointerDown={(e) => {
+               if ((e.target as HTMLElement).tagName === 'BUTTON') e.stopPropagation();
             }}
           >
-            {/* Left: Menu & Title */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: Theme.Space.S }}>
-                 <DropdownMenu 
-                    trigger={<Button variant="ghost" icon={DotsThree} size="S" style={{ padding: 4, height: 28, width: 28, minWidth: 28 }} />}
-                    align="left"
-                    items={[
-                        { label: 'Reset View', onClick: () => {} },
-                        { label: 'Dock Window', onClick: () => {} },
-                        { label: 'Help', onClick: () => {} }
-                    ]}
-                />
-                <span style={{ 
-                    ...Theme.Type.Expressive.Label.S, 
-                    color: Theme.Color.Base.Content[1], 
-                    letterSpacing: '0.05em', 
-                    fontWeight: 700,
-                    fontSize: '0.75rem'
-                }}>
-                  {title}
-                </span>
-            </div>
+             <div style={{ display: 'flex', alignItems: 'center', gap: DesignSystem.Space(2) }}>
+                 <button
+                    ref={menuButtonRef}
+                    onClick={handleMenuClick}
+                    style={{
+                      background: 'transparent',
+                      border: 'none',
+                      color: DesignSystem.Color.Base.Content[3],
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      padding: '4px',
+                      borderRadius: '4px',
+                      transition: 'color 0.2s'
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.color = DesignSystem.Color.Base.Content[1]}
+                    onMouseLeave={(e) => e.currentTarget.style.color = DesignSystem.Color.Base.Content[3]}
+                 >
+                    <DotsThree size={20} weight="bold" />
+                 </button>
+                 
+                 <span style={{ 
+                     ...DesignSystem.Type.Label.S, 
+                     color: DesignSystem.Color.Base.Content[1],
+                     opacity: 0.9
+                 }}>
+                     {title}
+                 </span>
+             </div>
 
-            {/* Right: Close Button */}
-            <motion.div 
-                whileHover={{ scale: 1.1 }} 
-                whileTap={{ scale: 0.9 }}
-                onClick={(e) => { e.stopPropagation(); onClose(); }}
-                style={{
-                    width: '14px', height: '14px',
-                    borderRadius: '50%',
-                    background: '#FF5F57', // macOS Red
-                    border: '1px solid #E0443E',
-                    cursor: 'pointer',
-                    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.1), 0 2px 4px rgba(0,0,0,0.1)'
-                }}
-            />
+             <button
+                 onClick={onClose}
+                 style={{
+                     width: '24px',
+                     height: '24px',
+                     borderRadius: DesignSystem.Effect.Radius.S,
+                     background: 'transparent',
+                     border: 'none',
+                     cursor: 'pointer',
+                     display: 'flex',
+                     alignItems: 'center',
+                     justifyContent: 'center',
+                     color: DesignSystem.Color.Base.Content[3],
+                     transition: 'all 0.2s'
+                 }}
+                 onMouseEnter={(e) => {
+                     e.currentTarget.style.background = DesignSystem.Color.Feedback.Error;
+                     e.currentTarget.style.color = '#fff';
+                 }}
+                 onMouseLeave={(e) => {
+                     e.currentTarget.style.background = 'transparent';
+                     e.currentTarget.style.color = DesignSystem.Color.Base.Content[3];
+                 }}
+             >
+                 <X size={14} weight="bold" />
+             </button>
           </div>
 
-          {/* Content */}
-          <div style={{
-            flex: 1,
-            overflowY: 'auto',
-            overflowX: 'hidden',
-            padding: Theme.Space.M,
-            position: 'relative'
-          }}>
+          {/* Body */}
+          <div style={{ 
+              flex: 1, 
+              overflow: 'auto', 
+              padding: DesignSystem.Space(3),
+              position: 'relative',
+          }} onPointerDown={(e) => e.stopPropagation()}>
             {children}
           </div>
 
-          {/* Footer (Undo/Redo) */}
+          {/* Footer */}
           <div style={{
-              height: '48px',
-              borderTop: `1px solid ${Theme.Color.Effect.Border}`,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              padding: `0 ${Theme.Space.M}px`,
-              background: 'rgba(0,0,0,0.2)',
-              flexShrink: 0
-          }}>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <Button variant="ghost" icon={ArrowUUpLeft} onClick={onUndo} disabled={!canUndo} size="S" title="Undo" style={{ padding: '4px 8px' }} />
-                <Button variant="ghost" icon={ArrowUUpRight} onClick={onRedo} disabled={!canRedo} size="S" title="Redo" style={{ padding: '4px 8px' }} />
-              </div>
-              <div style={{ ...Theme.Type.Expressive.Label.XS, color: Theme.Color.Base.Content[3], opacity: 0.5 }}>
-                  READY
-              </div>
+             height: '40px',
+             borderTop: `1px solid ${DesignSystem.Color.Base.Border[1]}`,
+             background: 'rgba(0,0,0,0.2)',
+             display: 'flex',
+             alignItems: 'center',
+             justifyContent: 'flex-start',
+             padding: `0 ${DesignSystem.Space(2)}`,
+             gap: DesignSystem.Space(1),
+             flexShrink: 0
+          }} onPointerDown={(e) => e.stopPropagation()}>
+             <Button 
+                variant="ghost" 
+                onClick={onUndo} 
+                title="Undo"
+                style={{ width: '28px', height: '28px', padding: 0 }}
+                disabled={!onUndo}
+             >
+                <ArrowCounterClockwise size={14} />
+             </Button>
+             <Button 
+                variant="ghost" 
+                onClick={onRedo} 
+                title="Redo"
+                style={{ width: '28px', height: '28px', padding: 0 }}
+                disabled={!onRedo}
+             >
+                <ArrowClockwise size={14} />
+             </Button>
+             
+             <div style={{ flex: 1 }} />
+             
+             {/* Decorational Footer Elements */}
+             <div style={{ display: 'flex', gap: '8px', opacity: 0.2 }}>
+                 <Minus size={12} />
+                 <CornersOut size={12} />
+             </div>
           </div>
-
         </motion.div>
       )}
+
+      {/* Portal Menu Render */}
+      <AnimatePresence>
+        {showMenu && menuRect && (
+            <ContextMenu rect={menuRect} onClose={() => setShowMenu(false)} />
+        )}
+      </AnimatePresence>
     </AnimatePresence>
   );
 };

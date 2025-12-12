@@ -9,13 +9,13 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "three": "^0.181.2",
-    "@google/genai": "^1.32.0",
-    "framer-motion": "^12.23.25",
-    "react-dom": "^19.2.1",
     "react": "^19.2.1",
-    "gsap": "^3.14.1",
-    "@phosphor-icons/react": "^2.1.10"
+    "react-dom": "^19.2.1",
+    "uuid": "^13.0.0",
+    "framer-motion": "^12.23.26",
+    "three": "^0.182.0",
+    "@phosphor-icons/react": "^2.1.10",
+    "gsap": "^3.14.1"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
