@@ -3,7 +3,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, Reorder, AnimatePresence, useDragControls } from 'framer-motion';
 import { v4 as uuidv4 } from 'uuid';
-import { Play, Pause, Diamond, DotsSixVertical, Plus, DotsThreeVertical, Scissors, Copy, Trash, Camera as CameraIcon, ArrowCounterClockwise, SpeakerHigh, Cube } from '@phosphor-icons/react';
+import { Play, Pause, Diamond, DotsSixVertical, Plus, DotsThreeVertical, Scissors, Copy, Trash, Camera as CameraIcon, ArrowCounterClockwise, SpeakerHigh, Cube, PencilSimple } from '@phosphor-icons/react';
 import { DesignSystem } from '../../theme';
 import { SceneObject } from '../../engine';
 import { Button } from '../Core/Primitives';
@@ -34,10 +34,12 @@ const TrackContextMenu: React.FC<{
   onRemove: () => void;
   onSplit: () => void;
   onDuplicate: () => void;
+  onRename: () => void;
   onResetCamera?: () => void;
-}> = ({ rect, isLocked, onClose, onRemove, onSplit, onDuplicate, onResetCamera }) => {
+}> = ({ rect, isLocked, onClose, onRemove, onSplit, onDuplicate, onRename, onResetCamera }) => {
   const menuActions = [
       ...(onResetCamera ? [{ label: 'Reset Camera', icon: <ArrowCounterClockwise />, action: onResetCamera, danger: false, disabled: false }] : []),
+      { label: 'Rename', icon: <PencilSimple />, action: onRename, disabled: false },
       { label: 'Split Clip', icon: <Scissors />, action: onSplit, disabled: isLocked },
       { label: 'Duplicate', icon: <Copy />, action: onDuplicate, disabled: isLocked },
       { label: 'Delete Track', icon: <Trash />, action: onRemove, danger: true, disabled: isLocked },
@@ -117,6 +119,8 @@ const TimelineItem: React.FC<{
   const [showMenu, setShowMenu] = useState(false);
   const [menuRect, setMenuRect] = useState<DOMRect | null>(null);
   const dragControls = useDragControls();
+  const [isEditingName, setIsEditingName] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const isLocked = obj.type === 'camera';
 
@@ -143,6 +147,11 @@ const TimelineItem: React.FC<{
         animations: [],
         fov: 60,
     });
+  };
+
+  const startRenaming = () => {
+    setIsEditingName(true);
+    setTimeout(() => inputRef.current?.focus(), 50);
   };
   
   const getIcon = () => {
@@ -185,7 +194,7 @@ const TimelineItem: React.FC<{
               transition: 'background 0.2s',
           }}
         >
-            <div style={{ display: 'flex', alignItems: 'center', gap: DesignSystem.Space(2), overflow: 'hidden' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: DesignSystem.Space(2), overflow: 'hidden', flex: 1 }}>
                 <motion.div 
                     onPointerDown={(e) => !isLocked && dragControls.start(e)}
                     style={{ cursor: isLocked ? 'default' : 'grab', color: DesignSystem.Color.Base.Content[3], padding: '4px', opacity: isLocked ? 0.3 : 1 }}
@@ -194,14 +203,50 @@ const TimelineItem: React.FC<{
                 >
                     <DotsSixVertical size={16} weight="bold" />
                 </motion.div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', overflow: 'hidden' }}>
-                     <span style={{ ...DesignSystem.Type.Label.S, color: isSelected ? DesignSystem.Color.Accent.Content[2] : DesignSystem.Color.Base.Content[1], display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        {getIcon()}
-                        {obj.type === 'camera' ? 'MAIN CAMERA' : obj.type.toUpperCase()}
-                     </span>
-                     <span style={{ fontSize: '9px', fontFamily: DesignSystem.Type.Label.S.fontFamily, color: DesignSystem.Color.Base.Content[3] }}>
-                        {obj.id === 'camera-main' ? 'LOCKED' : `CH ${obj.id.slice(0, 3)}`}
-                     </span>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', overflow: 'hidden', flex: 1 }}>
+                     {isEditingName ? (
+                         <input 
+                            ref={inputRef}
+                            defaultValue={obj.name || obj.type.toUpperCase()}
+                            onBlur={(e) => { setIsEditingName(false); onUpdateObject(obj.id, { name: e.target.value }); }}
+                            onKeyDown={(e) => { if(e.key === 'Enter') e.currentTarget.blur(); }}
+                            onPointerDown={(e) => e.stopPropagation()}
+                            style={{
+                                background: DesignSystem.Color.Base.Surface[1],
+                                border: `1px solid ${DesignSystem.Color.Accent.Surface[1]}`,
+                                color: DesignSystem.Color.Base.Content[1],
+                                borderRadius: '4px',
+                                padding: '2px 4px',
+                                fontSize: '10px',
+                                fontFamily: DesignSystem.Type.Label.S.fontFamily,
+                                outline: 'none',
+                                width: '100%'
+                            }}
+                         />
+                     ) : (
+                         <span 
+                            onDoubleClick={startRenaming}
+                            style={{ 
+                                ...DesignSystem.Type.Label.S, 
+                                color: isSelected ? DesignSystem.Color.Accent.Content[2] : DesignSystem.Color.Base.Content[1], 
+                                display: 'flex', 
+                                alignItems: 'center', 
+                                gap: '4px',
+                                whiteSpace: 'nowrap',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                cursor: 'text'
+                             }}
+                         >
+                            {getIcon()}
+                            {obj.name || (obj.type === 'camera' ? 'MAIN CAMERA' : obj.type.toUpperCase())}
+                         </span>
+                     )}
+                     {!isEditingName && (
+                        <span style={{ fontSize: '9px', fontFamily: DesignSystem.Type.Label.S.fontFamily, color: DesignSystem.Color.Base.Content[3] }}>
+                            {obj.id === 'camera-main' ? 'LOCKED' : `CH ${obj.id.slice(0, 3)}`}
+                        </span>
+                     )}
                 </div>
             </div>
             <button
@@ -333,6 +378,7 @@ const TimelineItem: React.FC<{
                   onRemove={() => onRemove(obj.id)} 
                   onSplit={() => onSplit(obj.id)} 
                   onDuplicate={() => onDuplicate(obj.id)}
+                  onRename={startRenaming}
                   onResetCamera={obj.type === 'camera' ? handleResetCamera : undefined}
               />
           )}
@@ -360,7 +406,7 @@ export const TimelineSequencer: React.FC<TimelineProps> = ({
   const handleDuplicate = (id: string) => {
       const obj = objects.find(o => o.id === id);
       if (!obj) return;
-      const newObj = { ...obj, id: uuidv4(), startTime: obj.startTime + 0.5 };
+      const newObj = { ...obj, id: uuidv4(), startTime: obj.startTime + 0.5, name: `${obj.name || obj.type} Copy` };
       setObjects(prev => [...prev, newObj]);
   };
 
@@ -374,7 +420,7 @@ export const TimelineSequencer: React.FC<TimelineProps> = ({
       const newDuration2 = objectToSplit.duration - splitOffset;
 
       const newObject1 = { ...objectToSplit, duration: newDuration1 };
-      const newObject2 = { ...objectToSplit, id: uuidv4(), startTime: currentTime, duration: newDuration2, animations: [] }; 
+      const newObject2 = { ...objectToSplit, id: uuidv4(), startTime: currentTime, duration: newDuration2, animations: [], name: `${objectToSplit.name || objectToSplit.type} Split` }; 
       
       setObjects(prev => prev.map(o => o.id === idToSplit ? newObject1 : o).concat(newObject2));
   };

@@ -69,6 +69,7 @@ export const Button: React.FC<ButtonProps> = ({ children, as = 'button', variant
     <Component 
       whileHover={!props.disabled ? { scale: 1.02, filter: 'brightness(1.1)' } : {}} 
       whileTap={!props.disabled ? { scale: 0.96 } : {}} 
+      onPointerDown={(e) => e.stopPropagation()}
       style={{ ...getStyles(), ...style }} 
       {...props as any}
     >
@@ -80,7 +81,10 @@ export const Button: React.FC<ButtonProps> = ({ children, as = 'button', variant
 export const Slider: React.FC<SliderProps> = ({ label, value, min = 0, max = 100, step = 1, onChange, unit }) => {
   const displayValue = value ?? 0;
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', width: '100%' }}>
+    <div 
+      style={{ display: 'flex', flexDirection: 'column', gap: '6px', width: '100%' }}
+      onPointerDown={(e) => e.stopPropagation()}
+    >
       {label && (
         <div style={{ display: 'flex', justifyContent: 'space-between', ...DesignSystem.Type.Label.S, color: DesignSystem.Color.Base.Content[2] }}>
           <span>{label}</span>
@@ -99,7 +103,11 @@ export const Slider: React.FC<SliderProps> = ({ label, value, min = 0, max = 100
 
 export const Toggle: React.FC<ToggleProps> = ({ label, value, onChange }) => {
   return (
-    <div onClick={() => onChange(!value)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', height: '32px', cursor: 'pointer', padding: '0 4px' }}>
+    <div 
+      onClick={() => onChange(!value)} 
+      onPointerDown={(e) => e.stopPropagation()}
+      style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', height: '32px', cursor: 'pointer', padding: '0 4px' }}
+    >
       <span style={{ ...DesignSystem.Type.Label.S, color: DesignSystem.Color.Base.Content[2] }}>{label}</span>
       <div style={{ width: '32px', height: '18px', background: value ? DesignSystem.Color.Accent.Surface[1] : DesignSystem.Color.Base.Surface[3], borderRadius: '99px', position: 'relative', transition: DesignSystem.Effect.Transition.Fast, boxShadow: value ? DesignSystem.Effect.Shadow.Glow : 'none' }}>
         <motion.div animate={{ x: value ? 16 : 2 }} transition={{ type: "spring", stiffness: 500, damping: 30 }} style={{ width: '14px', height: '14px', background: '#fff', borderRadius: '50%', position: 'absolute', top: '2px', boxShadow: '0 1px 2px rgba(0,0,0,0.2)' }} />
@@ -110,7 +118,10 @@ export const Toggle: React.FC<ToggleProps> = ({ label, value, onChange }) => {
 
 export const Input: React.FC<InputProps> = ({ label, style, ...props }) => {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', width: '100%' }}>
+    <div 
+      style={{ display: 'flex', flexDirection: 'column', gap: '6px', width: '100%' }}
+      onPointerDown={(e) => e.stopPropagation()}
+    >
         {label && <label style={{ ...DesignSystem.Type.Label.S, color: DesignSystem.Color.Base.Content[2] }}>{label}</label>}
         <input style={{ background: DesignSystem.Color.Base.Surface[3], border: `1px solid transparent`, color: DesignSystem.Color.Base.Content[1], borderRadius: DesignSystem.Effect.Radius.S, padding: `${DesignSystem.Space(2)} ${DesignSystem.Space(3)}`, fontSize: '12px', fontFamily: DesignSystem.Type.Body.M.fontFamily, outline: 'none', width: '100%', transition: 'border-color 0.2s', ...style }} onFocus={(e) => e.target.style.borderColor = DesignSystem.Color.Base.Border[2]} onBlur={(e) => e.target.style.borderColor = 'transparent'} {...props} />
     </div>
@@ -119,7 +130,10 @@ export const Input: React.FC<InputProps> = ({ label, style, ...props }) => {
 
 export const Select: React.FC<SelectProps> = ({ label, children, ...props }) => {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', width: '100%' }}>
+    <div 
+      style={{ display: 'flex', flexDirection: 'column', gap: '6px', width: '100%' }}
+      onPointerDown={(e) => e.stopPropagation()}
+    >
         <label style={{ ...DesignSystem.Type.Label.S, color: DesignSystem.Color.Base.Content[2] }}>{label}</label>
         <div style={{ position: 'relative' }}>
              <select

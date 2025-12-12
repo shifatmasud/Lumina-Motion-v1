@@ -22,7 +22,8 @@ import {
   MusicNotes,
   SpeakerHigh,
   Palette,
-  Diamond
+  Diamond,
+  Cylinder
 } from '@phosphor-icons/react';
 import gsap from 'gsap';
 
@@ -186,8 +187,11 @@ const App = () => {
   };
     
   const handleAddObject = (type: SceneObject['type'], url?: string, width?: number, height?: number) => {
+    const defaultName = type === 'mesh' ? 'Cube' : type === 'camera' ? 'Camera' : type === 'audio' ? 'Audio' : type === 'video' ? 'Video' : 'Object';
+    
     const newObj: SceneObject = {
       id: uuidv4(), type,
+      name: defaultName,
       position: [(Math.random() - 0.5) * 2, (Math.random() - 0.5) * 2, 0],
       rotation: [0, 0, 0], scale: [1, 1, 1], url,
       width, height,
@@ -195,6 +199,7 @@ const App = () => {
       metalness: type === 'mesh' ? 0.2 : undefined,
       roughness: type === 'mesh' ? 0.1 : undefined,
       opacity: 1.0,
+      curvature: 0,
       volume: type === 'audio' || type === 'video' ? 1.0 : undefined,
       chromaKey: type === 'video' ? { enabled: false, color: '#00ff00', similarity: 0.1, smoothness: 0.1 } : undefined,
       loop: type === 'video' ? true : undefined,
@@ -226,13 +231,10 @@ const App = () => {
       const time = Math.max(0, currentTime - o.startTime);
 
       const newValues: TimelineKeyframe['values'] = {
-        // FIX: Explicitly cast the spread array to a tuple to match the type definition.
         position: [...o.position] as [number, number, number],
-        // FIX: Explicitly cast the spread array to a tuple to match the type definition.
         rotation: [...o.rotation] as [number, number, number],
       };
       
-      // FIX: Explicitly cast the spread array to a tuple to match the type definition.
       if (o.type !== 'camera') newValues.scale = [...o.scale] as [number, number, number];
       if (o.type === 'mesh') {
         newValues.metalness = o.metalness;
@@ -240,13 +242,12 @@ const App = () => {
       }
       if (o.type === 'audio' || o.type === 'video') newValues.volume = o.volume;
       newValues.opacity = o.opacity;
+      newValues.curvature = o.curvature;
 
       const existingIndex = newAnimations.findIndex(kf => Math.abs(kf.time - time) < 0.01);
       if (existingIndex !== -1) {
-        // Update existing keyframe with current object state
         newAnimations[existingIndex].values = { ...newAnimations[existingIndex].values, ...newValues };
       } else {
-        // Add new keyframe
         newAnimations.push({ time, values: newValues, easing: 'power2.out' });
       }
       
@@ -267,13 +268,12 @@ const App = () => {
   
   const handleSelectKeyframe = (id: string, index: number) => {
     if (selectedKeyframe?.id === id && selectedKeyframe.index === index) {
-      setSelectedKeyframe(null); // Deselect if same keyframe is clicked
+      setSelectedKeyframe(null); 
     } else {
-      setSelectedId(id); // Ensure the correct object is selected
+      setSelectedId(id); 
       setSelectedKeyframe({ id, index });
       setShowProperties(true);
 
-      // Seek timeline to the keyframe's time for intuitive editing
       const obj = objects.find(o => o.id === id);
       const kf = obj?.animations[index];
       if (obj && kf) {
@@ -314,7 +314,6 @@ const App = () => {
       else if (name.endsWith('.glb') || name.endsWith('.gltf')) handleAddObject('glb', url);
   };
 
-  // Helper to dim hex color
   const adjustColor = (color: string, amount: number) => {
       return '#' + color.replace(/^#/, '').match(/.{1,2}/g)!.map(c => Math.max(0, Math.min(255, parseInt(c, 16) + amount)).toString(16).padStart(2, '0')).join('');
   }
@@ -329,6 +328,7 @@ const App = () => {
     const baseState: TimelineKeyframe['values'] = {
         position: objData.position, rotation: objData.rotation, scale: objData.scale,
         metalness: objData.metalness, roughness: objData.roughness, opacity: objData.opacity, volume: objData.volume,
+        curvature: objData.curvature,
     };
     const baseKeyframe: TimelineKeyframe = { time: 0, values: {}, easing: keyframes[0]?.easing || 'power2.out' };
 
@@ -387,11 +387,9 @@ const App = () => {
 
             let updatedValue = value;
             if (axis !== undefined) {
-                // FIX: Ensure array properties are treated as tuples of 3 numbers to maintain type safety.
                 const currentValue = (kfToUpdate.values[property as keyof typeof kfToUpdate.values] as [number, number, number]) || 
                                      (o[property as keyof SceneObject] as [number, number, number]) || 
                                      (property.includes('scale') ? [1, 1, 1] : [0, 0, 0]);
-                // FIX: Spreading 'currentValue' results in 'any[]', which is not assignable to a tuple. Cast the result to the correct tuple type.
                 const newTuple = [...currentValue] as [number, number, number];
                 newTuple[axis] = value;
                 updatedValue = newTuple;
@@ -408,9 +406,7 @@ const App = () => {
             if (o.id !== selectedId) return o;
             let updatedValue = value;
             if (axis !== undefined) {
-                // FIX: Ensure array properties are treated as tuples of 3 numbers to maintain type safety.
                 const currentValue = (o[property as keyof SceneObject] as [number, number, number]) || (property.includes('scale') ? [1, 1, 1] : [0, 0, 0]);
-                // FIX: Spreading 'currentValue' results in 'any[]', which is not assignable to a tuple. Cast the result to the correct tuple type.
                 const newTuple = [...currentValue] as [number, number, number];
                 newTuple[axis] = value;
                 updatedValue = newTuple;
@@ -493,7 +489,7 @@ const App = () => {
             <div style={{ display: 'flex', flexDirection: 'column', gap: DesignSystem.Space(3) }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: DesignSystem.Color.Base.Surface[2], padding: DesignSystem.Space(2), borderRadius: DesignSystem.Effect.Radius.M }}>
                     <div style={{ display: 'flex', flexDirection: 'column' }}>
-                        <span style={{ ...DesignSystem.Type.Label.S, color: DesignSystem.Color.Accent.Content[2] }}>{selectedObject.type === 'camera' ? 'MAIN CAMERA' : selectedObject.type}</span>
+                        <span style={{ ...DesignSystem.Type.Label.S, color: DesignSystem.Color.Accent.Content[2] }}>{selectedObject.name || (selectedObject.type === 'camera' ? 'MAIN CAMERA' : selectedObject.type)}</span>
                         <span style={{ ...DesignSystem.Type.Label.S, color: DesignSystem.Color.Base.Content[3] }}>#{selectedObject.id.slice(0,4)}</span>
                     </div>
                     {selectedKeyframe?.id === selectedObject.id && (
@@ -578,6 +574,12 @@ const App = () => {
                 {(selectedObject.type === 'audio' || selectedObject.type === 'video') && (
                     <Group title="AUDIO" icon={<SpeakerHigh />}>
                         <PropSlider label="VOLUME" property="volume" min={0} max={1} step={0.05} />
+                    </Group>
+                )}
+
+                {(selectedObject.type === 'video' || selectedObject.type === 'plane') && (
+                    <Group title="DISTORTION" icon={<Cylinder />}>
+                        <PropSlider label="CYLINDER WRAP" property="curvature" min={-0.5} max={0.5} step={0.01} />
                     </Group>
                 )}
 

@@ -12,7 +12,7 @@ import gsap from 'gsap';
 export interface TimelineKeyframe {
   time: number; // in seconds, relative to the clip's start
   easing?: string; // for GSAP
-  values: Partial<Pick<SceneObject, 'position' | 'rotation' | 'scale' | 'metalness' | 'roughness' | 'volume' | 'opacity'>>;
+  values: Partial<Pick<SceneObject, 'position' | 'rotation' | 'scale' | 'metalness' | 'roughness' | 'volume' | 'opacity' | 'curvature'>>;
 }
 
 export interface TransitionEffect {
@@ -28,6 +28,7 @@ export interface TransitionEffect {
 
 export interface SceneObject {
   id: string;
+  name?: string;
   type: 'mesh' | 'plane' | 'video' | 'glb' | 'audio' | 'camera';
   url?: string;
   width?: number;
@@ -39,6 +40,7 @@ export interface SceneObject {
   metalness?: number;
   roughness?: number;
   opacity?: number;
+  curvature?: number; // Cylinder wrap distortion
   volume?: number; // For audio
   fov?: number; // For camera
   loop?: boolean; // For video/audio
@@ -64,10 +66,21 @@ export interface GlobalSettings {
 }
 
 const chromaKeyVertexShader = `
+uniform float curvature;
 varying vec2 vUv;
 void main() {
   vUv = uv;
-  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  vec3 pos = position;
+  
+  if (abs(curvature) > 0.001) {
+     float radius = 1.0 / curvature;
+     // theta = x * curvature (approximation of x / radius)
+     float theta = pos.x * curvature;
+     pos.x = radius * sin(theta);
+     pos.z = radius * (1.0 - cos(theta));
+  }
+  
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
 }
 `;
 
@@ -261,7 +274,8 @@ export class Engine {
                planeWidth = 1.6 * aspectRatio;
            }
        }
-       const geometry = new THREE.PlaneGeometry(planeWidth, planeHeight);
+       // Use more segments to allow vertex displacement bending
+       const geometry = new THREE.PlaneGeometry(planeWidth, planeHeight, 32, 1);
        let material;
        let videoElement: HTMLVideoElement | null = null;
        
@@ -289,6 +303,7 @@ export class Engine {
                    similarity: { value: objData.chromaKey?.similarity || 0.1 },
                    smoothness: { value: objData.chromaKey?.smoothness || 0.1 },
                    opacity: { value: objData.opacity ?? 1.0 },
+                   curvature: { value: objData.curvature ?? 0.0 },
                    chromaKeyEnabled: { value: objData.chromaKey?.enabled || false }
                },
                vertexShader: chromaKeyVertexShader,
@@ -429,6 +444,7 @@ export class Engine {
         const baseState: TimelineKeyframe['values'] = {
             position: objData.position, rotation: objData.rotation, scale: objData.scale,
             metalness: objData.metalness, roughness: objData.roughness, opacity: objData.opacity, volume: objData.volume,
+            curvature: objData.curvature
         };
         const baseKeyframe: TimelineKeyframe = { time: 0, values: {}, easing: keyframes[0].easing };
         
@@ -469,6 +485,10 @@ export class Engine {
             const opacity = interpolatedValues.opacity ?? 1.0;
             if (mat.opacity !== undefined) mat.opacity = opacity;
             if (mat.uniforms?.opacity) mat.uniforms.opacity.value = opacity;
+            
+            if (mat.uniforms?.curvature && interpolatedValues.curvature !== undefined) {
+                mat.uniforms.curvature.value = interpolatedValues.curvature;
+            }
         }
 
         const finalVolume = interpolatedValues.volume ?? objData.volume ?? 1.0;
@@ -478,6 +498,10 @@ export class Engine {
             }
         }
       } else {
+        if (mat && mat.uniforms?.curvature) {
+             mat.uniforms.curvature.value = objData.curvature ?? 0.0;
+        }
+
         if ((objData.type === 'audio' || objData.type === 'video') && sound) {
             const baseVolume = objData.volume ?? 1.0;
             if (sound.getVolume() !== baseVolume) {
@@ -578,6 +602,10 @@ export class Engine {
                 uniforms.keyColor.value.set(chromaKey.color);
                 uniforms.similarity.value = chromaKey.similarity;
                 uniforms.smoothness.value = chromaKey.smoothness;
+            }
+            
+            if (uniforms.curvature) {
+                uniforms.curvature.value = objData.curvature ?? 0.0;
             }
         }
     });
