@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import { v4 as uuidv4 } from 'uuid';
@@ -26,7 +27,7 @@ import {
 import gsap from 'gsap';
 
 import { DesignSystem } from './theme';
-import { Engine, SceneObject, AnimationTrack, GlobalSettings, TransitionEffect, Keyframe } from './engine';
+import { Engine, SceneObject, GlobalSettings, TransitionEffect, TimelineKeyframe } from './engine';
 import { Window } from './components/Core/Window';
 import { Button, Input, Slider, Toggle, Divider, Group, Select } from './components/Core/Primitives';
 import { TimelineSequencer } from './components/Section/Timeline';
@@ -71,7 +72,7 @@ const App = () => {
     {
       id: 'camera-main',
       type: 'camera',
-      position: [4, 3, 6],
+      position: [0, 0, 6],
       rotation: [0, 0, 0],
       scale: [1, 1, 1],
       startTime: 0,
@@ -100,8 +101,8 @@ const App = () => {
   ]);
   const [selectedId, setSelectedId] = useState<string | null>('1');
   
-  // Selected Keyframe State: { objectId, propertyName, keyframeIndex }
-  const [selectedKeyframe, setSelectedKeyframe] = useState<{ id: string, property: string, index: number } | null>(null);
+  // Selected Keyframe State: { objectId, keyframeIndex }
+  const [selectedKeyframe, setSelectedKeyframe] = useState<{ id: string, index: number } | null>(null);
 
   const [globalSettings, setGlobalSettings] = useState<GlobalSettings>({
       backgroundColor: '#000000',
@@ -213,43 +214,33 @@ const App = () => {
     if (!selectedId) return;
     setObjects(prev => prev.map(o => {
       if (o.id !== selectedId) return o;
+      
       const newAnimations = o.animations ? [...o.animations] : [];
       const time = Math.max(0, currentTime - o.startTime);
 
-      // Smart Keyframing: Detect properties based on type
-      const keyableProps: { property: string, value: any }[] = [
-        { property: 'position', value: [...o.position] },
-        { property: 'rotation', value: [...o.rotation] },
-      ];
-
-      if (o.type !== 'camera') {
-        keyableProps.push({ property: 'scale', value: [...o.scale] });
-      }
-
+      const newValues: TimelineKeyframe['values'] = {
+        position: [...o.position],
+        rotation: [...o.rotation],
+      };
+      
+      if (o.type !== 'camera') newValues.scale = [...o.scale];
       if (o.type === 'mesh') {
-        keyableProps.push({ property: 'metalness', value: o.metalness ?? 0.2 });
-        keyableProps.push({ property: 'roughness', value: o.roughness ?? 0.1 });
+        newValues.metalness = o.metalness;
+        newValues.roughness = o.roughness;
+      }
+      if (o.type === 'audio') newValues.volume = o.volume;
+      newValues.opacity = o.opacity;
+
+      const existingIndex = newAnimations.findIndex(kf => Math.abs(kf.time - time) < 0.01);
+      if (existingIndex !== -1) {
+        // Update existing keyframe with current object state
+        newAnimations[existingIndex].values = { ...newAnimations[existingIndex].values, ...newValues };
+      } else {
+        // Add new keyframe
+        newAnimations.push({ time, values: newValues, easing: 'power2.out' });
       }
       
-      if (o.type === 'audio') {
-         keyableProps.push({ property: 'volume', value: o.volume ?? 1.0 });
-      }
-
-      keyableProps.forEach(({ property, value }) => {
-        let track = newAnimations.find(t => t.property === property);
-        if (!track) {
-          track = { property, keyframes: [] };
-          newAnimations.push(track);
-        }
-        // Remove existing keyframe at same time (tolerance 0.01s)
-        const existingIndex = track.keyframes.findIndex(kf => Math.abs(kf.time - time) < 0.01);
-        if (existingIndex !== -1) {
-             track.keyframes[existingIndex].value = value;
-        } else {
-             track.keyframes.push({ time, value, easing: 'power2.out' });
-        }
-        track.keyframes.sort((a, b) => a.time - b.time);
-      });
+      newAnimations.sort((a, b) => a.time - b.time);
       return { ...o, animations: newAnimations };
     }));
   };
@@ -258,27 +249,23 @@ const App = () => {
       if (!selectedKeyframe) return;
       setObjects(prev => prev.map(o => {
           if (o.id !== selectedKeyframe.id) return o;
-          const newAnims = o.animations.map(track => {
-              if (track.property !== selectedKeyframe.property) return track;
-              return { ...track, keyframes: track.keyframes.filter((_, i) => i !== selectedKeyframe.index) };
-          });
+          const newAnims = o.animations.filter((_, i) => i !== selectedKeyframe.index);
           return { ...o, animations: newAnims };
       }));
       setSelectedKeyframe(null);
   };
   
-  const handleSelectKeyframe = (id: string, property: string, index: number) => {
-    if (selectedKeyframe?.id === id && selectedKeyframe.property === property && selectedKeyframe.index === index) {
+  const handleSelectKeyframe = (id: string, index: number) => {
+    if (selectedKeyframe?.id === id && selectedKeyframe.index === index) {
       setSelectedKeyframe(null); // Deselect if same keyframe is clicked
     } else {
       setSelectedId(id); // Ensure the correct object is selected
-      setSelectedKeyframe({ id, property, index });
+      setSelectedKeyframe({ id, index });
       setShowProperties(true);
 
       // Seek timeline to the keyframe's time for intuitive editing
       const obj = objects.find(o => o.id === id);
-      const track = obj?.animations.find(t => t.property === property);
-      const kf = track?.keyframes[index];
+      const kf = obj?.animations[index];
       if (obj && kf) {
           setCurrentTime(obj.startTime + kf.time);
       }
@@ -324,141 +311,122 @@ const App = () => {
   
   // --- Prop Control Helpers ---
 
-  // Calculates the value of a property at a specific time, including animations.
   const getInterpolatedValueAtTime = (objData: SceneObject, property: string, localTime: number) => {
-    const track = objData.animations?.find(t => t.property === property);
-    const getBaseValue = (prop: string) => objData[prop as keyof SceneObject];
+    const baseValue = objData[property as keyof SceneObject];
+    if (!objData.animations || objData.animations.length === 0) return baseValue;
 
-    if (!track || track.keyframes.length === 0) return getBaseValue(property);
+    const keyframes = [...objData.animations];
+    const baseState: TimelineKeyframe['values'] = {
+        position: objData.position, rotation: objData.rotation, scale: objData.scale,
+        metalness: objData.metalness, roughness: objData.roughness, opacity: objData.opacity, volume: objData.volume,
+    };
+    const baseKeyframe: TimelineKeyframe = { time: 0, values: {}, easing: keyframes[0]?.easing || 'power2.out' };
 
-    const keyframes = [...track.keyframes];
-    if (keyframes[0].time > 0) {
-        keyframes.unshift({ time: 0, value: getBaseValue(property), easing: keyframes[0].easing });
-    }
-
-    let kf1: Keyframe = keyframes[0];
-    let kf2: Keyframe | null = null;
-    
+    let kf1 = baseKeyframe;
+    let kf2 = null;
     for (const kf of keyframes) {
         if (kf.time <= localTime) kf1 = kf;
         else { kf2 = kf; break; }
     }
+    if (!kf2) kf2 = kf1;
 
-    if (!kf2 || kf1 === kf2) return kf1.value;
+    const kf1Values = { ...baseState, ...kf1.values };
+    const kf2Values = { ...baseState, ...kf2.values };
+    
+    const startVal = kf1Values[property as keyof typeof kf1Values];
+    const endVal = kf2Values[property as keyof typeof kf2Values];
+
+    if (startVal === undefined || endVal === undefined) return baseValue;
 
     const duration = kf2.time - kf1.time;
     const progress = duration > 0 ? (localTime - kf1.time) / duration : 1;
     const ease = gsap.parseEase(kf1.easing || 'power2.out');
     const easedProgress = ease(progress);
 
-    return gsap.utils.interpolate(kf1.value, kf2.value, easedProgress);
+    return gsap.utils.interpolate(startVal, endVal, easedProgress);
   }
   
   const getControlValue = (property: string, axis?: number) => {
     if (!selectedObject) return axis !== undefined ? 0 : (property.includes('scale') ? 1 : 0);
 
-    // If a keyframe is selected for this object, all controls should show the interpolated value at the current time.
     if (selectedKeyframe && selectedKeyframe.id === selectedObject.id) {
-        const localTime = currentTime - selectedObject.startTime;
-        const value = getInterpolatedValueAtTime(selectedObject, property, localTime);
-        if (axis !== undefined && Array.isArray(value)) return (value as any)[axis];
-        return value;
+        const kf = selectedObject.animations[selectedKeyframe.index];
+        const val = kf?.values[property as keyof typeof kf.values];
+        const fallback = selectedObject[property as keyof SceneObject];
+        const finalVal = val !== undefined ? val : fallback;
+        if (axis !== undefined && Array.isArray(finalVal)) return (finalVal as any)[axis];
+        return finalVal;
     }
     
-    // Otherwise, show the base property value.
-    const val = selectedObject[property as keyof SceneObject];
-    if (axis !== undefined && Array.isArray(val)) return (val as any)[axis];
-    return val;
+    const localTime = currentTime - selectedObject.startTime;
+    const value = getInterpolatedValueAtTime(selectedObject, property, localTime);
+    if (axis !== undefined && Array.isArray(value)) return (value as any)[axis];
+    return value;
   }
 
   const handleControlChange = (property: string, value: any, axis?: number) => {
-    // If a keyframe is selected, all edits should create/update keyframes at that keyframe's time.
-    if (selectedKeyframe && selectedId) {
-        const selectedObjectForKf = objects.find(o => o.id === selectedKeyframe.id);
-        const selectedTrackForKf = selectedObjectForKf?.animations.find(t => t.property === selectedKeyframe.property);
-        const keyframeInstance = selectedTrackForKf?.keyframes[selectedKeyframe.index];
+    if (!selectedId) return;
 
-        if (!keyframeInstance) {
-            console.error("In keyframe edit mode but couldn't find selected keyframe instance.");
-            return;
-        }
-
-        const keyframeTargetTime = keyframeInstance.time;
-
+    if (selectedKeyframe && selectedKeyframe.id === selectedId) {
         setObjects(prev => prev.map(o => {
             if (o.id !== selectedId) return o;
-
-            const newAnimations = o.animations ? o.animations.map(a => ({ ...a, keyframes: [...a.keyframes] })) : [];
-            let track = newAnimations.find(t => t.property === property);
-
-            if (!track) {
-                track = { property, keyframes: [] };
-                newAnimations.push(track);
-            }
-
-            const existingKfIndex = track.keyframes.findIndex(kf => Math.abs(kf.time - keyframeTargetTime) < 0.001);
-
-            if (existingKfIndex !== -1) {
-                // Update an existing keyframe for the property being edited at the target time.
-                const keyframeToUpdate = track.keyframes[existingKfIndex];
-                let updatedValue = value;
-                if (axis !== undefined && Array.isArray(keyframeToUpdate.value)) {
-                    updatedValue = [...keyframeToUpdate.value];
-                    updatedValue[axis] = value;
-                }
-                track.keyframes[existingKfIndex] = { ...keyframeToUpdate, value: updatedValue };
-            } else {
-                // Create a new keyframe. Use interpolated value as base for vectors.
-                const baseValue = getInterpolatedValueAtTime(o, property, keyframeTargetTime);
-                let updatedValue = value;
-                if (axis !== undefined && Array.isArray(baseValue)) {
-                    updatedValue = [...baseValue];
-                    updatedValue[axis] = value;
-                }
-                track.keyframes.push({ time: keyframeTargetTime, value: updatedValue, easing: 'power2.out' });
-                track.keyframes.sort((a, b) => a.time - b.time);
-            }
             
-            return { ...o, animations: newAnimations };
+            const newAnims = [...o.animations];
+            const kfToUpdate = newAnims[selectedKeyframe.index];
+            if (!kfToUpdate) return o;
+
+            let updatedValue = value;
+            if (axis !== undefined) {
+                // FIX: Ensure array properties are treated as tuples of 3 numbers to maintain type safety.
+                const currentValue = (kfToUpdate.values[property as keyof typeof kfToUpdate.values] as [number, number, number]) || 
+                                     (o[property as keyof SceneObject] as [number, number, number]) || 
+                                     (property.includes('scale') ? [1, 1, 1] : [0, 0, 0]);
+                // FIX: Spreading 'currentValue' results in 'any[]', which is not assignable to a tuple. Cast the result to the correct tuple type.
+                const newTuple = [...currentValue] as [number, number, number];
+                newTuple[axis] = value;
+                updatedValue = newTuple;
+            }
+
+            newAnims[selectedKeyframe.index] = {
+                ...kfToUpdate,
+                values: { ...kfToUpdate.values, [property]: updatedValue }
+            };
+            return { ...o, animations: newAnims };
         }));
-    } else if (selectedId) {
-        // No keyframe selected, update the base property.
+    } else {
         setObjects(prev => prev.map(o => {
             if (o.id !== selectedId) return o;
             let updatedValue = value;
             if (axis !== undefined) {
-                const currentValue = (o[property as keyof SceneObject] as any[]) || [];
-                updatedValue = [...currentValue];
-                updatedValue[axis] = value;
+                // FIX: Ensure array properties are treated as tuples of 3 numbers to maintain type safety.
+                const currentValue = (o[property as keyof SceneObject] as [number, number, number]) || (property.includes('scale') ? [1, 1, 1] : [0, 0, 0]);
+                // FIX: Spreading 'currentValue' results in 'any[]', which is not assignable to a tuple. Cast the result to the correct tuple type.
+                const newTuple = [...currentValue] as [number, number, number];
+                newTuple[axis] = value;
+                updatedValue = newTuple;
             }
             return { ...o, [property]: updatedValue };
         }));
     }
   };
   
-  const handleKeyframePropertyChange = (property: keyof Keyframe, value: any) => {
+  const handleKeyframePropertyChange = (property: keyof TimelineKeyframe, value: any) => {
     if (!selectedKeyframe || !selectedObject) return;
 
     setObjects(prev => prev.map(o => {
         if (o.id !== selectedId) return o;
-        const newAnims = o.animations.map(track => {
-            if (track.property !== selectedKeyframe.property) return track;
-            
-            const newKeyframes = [...track.keyframes];
-            const currentKf = newKeyframes[selectedKeyframe.index];
-            
-            newKeyframes[selectedKeyframe.index] = { ...currentKf, [property]: value };
-            
-            return { ...track, keyframes: newKeyframes };
-        });
+        const newAnims = [...o.animations];
+        if (!newAnims[selectedKeyframe.index]) return o;
+        
+        newAnims[selectedKeyframe.index] = { ...newAnims[selectedKeyframe.index], [property]: value };
+        
         return { ...o, animations: newAnims };
     }));
   };
   
   const getSelectedKeyframeEasing = () => {
     if (!selectedKeyframe || !selectedObject) return 'power2.out';
-    const track = selectedObject.animations.find(t => t.property === selectedKeyframe.property);
-    const kf = track?.keyframes[selectedKeyframe.index];
+    const kf = selectedObject.animations[selectedKeyframe.index];
     return kf?.easing || 'power2.out';
   }
 

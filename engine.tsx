@@ -1,3 +1,4 @@
+
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
@@ -8,15 +9,10 @@ import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPa
 import { VignetteShader } from 'three/examples/jsm/shaders/VignetteShader.js';
 import gsap from 'gsap';
 
-export interface Keyframe {
+export interface TimelineKeyframe {
   time: number; // in seconds, relative to the clip's start
-  value: any;
   easing?: string; // for GSAP
-}
-
-export interface AnimationTrack {
-  property: string; // e.g., 'position', 'rotation.y', 'scale'
-  keyframes: Keyframe[];
+  values: Partial<Pick<SceneObject, 'position' | 'rotation' | 'scale' | 'metalness' | 'roughness' | 'volume' | 'opacity'>>;
 }
 
 export interface TransitionEffect {
@@ -53,7 +49,7 @@ export interface SceneObject {
   };
   startTime: number;
   duration: number;
-  animations: AnimationTrack[];
+  animations: TimelineKeyframe[];
   introTransition: TransitionEffect;
   outroTransition: TransitionEffect;
 }
@@ -128,7 +124,7 @@ export class Engine {
 
     // Camera
     this.camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
-    this.camera.position.set(4, 3, 6);
+    this.camera.position.set(0, 0, 6);
     
     // Audio Listener
     this.audioListener = new THREE.AudioListener();
@@ -365,10 +361,8 @@ export class Engine {
       obj3d.rotation.fromArray(objData.rotation.map(d => THREE.MathUtils.degToRad(d)));
       obj3d.scale.fromArray(objData.scale);
       
-      // Ensure we have a material to operate on before accessing properties
       let mat: any = null;
       if (obj3d instanceof THREE.Mesh) mat = obj3d.material;
-      // Handle Group children materials (simplified)
       
       if (mat) {
           if (mat instanceof THREE.MeshPhysicalMaterial) {
@@ -384,66 +378,57 @@ export class Engine {
       }
       
       // 2. Apply keyframe animations
-      if (objData.animations) {
-        objData.animations.forEach(track => {
-          if (track.keyframes.length === 0) return;
+      if (objData.animations && objData.animations.length > 0) {
+        const keyframes = [...objData.animations];
+        const baseState: TimelineKeyframe['values'] = {
+            position: objData.position, rotation: objData.rotation, scale: objData.scale,
+            metalness: objData.metalness, roughness: objData.roughness, opacity: objData.opacity, volume: objData.volume,
+        };
+        const baseKeyframe: TimelineKeyframe = { time: 0, values: {}, easing: keyframes[0].easing };
+        
+        let kf1: TimelineKeyframe = baseKeyframe;
+        let kf2: TimelineKeyframe | null = null;
+        for (const kf of keyframes) {
+            if (kf.time <= localTime) kf1 = kf;
+            else { kf2 = kf; break; }
+        }
+        if (!kf2) kf2 = kf1;
 
-          const getBaseValue = (property: string) => {
-              switch(property) {
-                  case 'position': return objData.position;
-                  case 'rotation': return objData.rotation;
-                  case 'scale': return objData.scale;
-                  case 'metalness': return objData.metalness ?? 0.2;
-                  case 'roughness': return objData.roughness ?? 0.1;
-                  case 'volume': return objData.volume ?? 1.0;
-                  default: return track.keyframes[0].value;
-              }
-          };
+        const duration = kf2.time - kf1.time;
+        const progress = duration > 0 ? (localTime - kf1.time) / duration : 1;
+        const ease = gsap.parseEase(kf1.easing || 'power2.out');
+        const easedProgress = ease(progress);
 
-          const keyframes = [...track.keyframes];
-          if (keyframes[0].time > 0) {
-              keyframes.unshift({
-                  time: 0,
-                  value: getBaseValue(track.property),
-                  easing: keyframes[0].easing
-              });
-          }
-          
-          let kf1: Keyframe = keyframes[0];
-          let kf2: Keyframe | null = null;
-          
-          for (const kf of keyframes) {
-              if (kf.time <= localTime) {
-                  kf1 = kf;
-              } else {
-                  kf2 = kf;
-                  break;
-              }
-          }
-          
-          let value;
-          if (!kf2) {
-              value = kf1.value;
-          } else {
-              const duration = kf2.time - kf1.time;
-              const progress = duration > 0 ? (localTime - kf1.time) / duration : 1;
-              const ease = gsap.parseEase(kf1.easing || 'power2.out');
-              const easedProgress = ease(progress);
-              value = gsap.utils.interpolate(kf1.value, kf2.value, easedProgress);
-          }
-          
-          if (track.property === 'position' && Array.isArray(value)) obj3d.position.fromArray(value);
-          else if (track.property === 'rotation' && Array.isArray(value)) obj3d.rotation.fromArray(value.map(v => THREE.MathUtils.degToRad(v)));
-          else if (track.property === 'scale' && Array.isArray(value)) obj3d.scale.fromArray(value);
-          // Material props
-          else if (track.property === 'metalness' && mat) mat.metalness = value;
-          else if (track.property === 'roughness' && mat) mat.roughness = value;
-          // Audio
-          else if (track.property === 'volume' && objData.type === 'audio') {
-              const sound = obj3d.children.find(c => c instanceof THREE.PositionalAudio) as THREE.PositionalAudio;
-              if (sound) sound.setVolume(value);
-          }
-        });
+        const kf1Values = { ...baseState, ...kf1.values };
+        const kf2Values = { ...baseState, ...kf2.values };
+
+        const interpolatedValues: TimelineKeyframe['values'] = {};
+
+        for (const key in kf1Values) {
+            const prop = key as keyof TimelineKeyframe['values'];
+            const startVal = kf1Values[prop];
+            const endVal = kf2Values[prop];
+            if (startVal !== undefined && endVal !== undefined) {
+                 (interpolatedValues as any)[prop] = gsap.utils.interpolate(startVal, endVal, easedProgress);
+            }
+        }
+
+        if (interpolatedValues.position) obj3d.position.fromArray(interpolatedValues.position);
+        if (interpolatedValues.rotation) obj3d.rotation.fromArray(interpolatedValues.rotation.map(v => THREE.MathUtils.degToRad(v)));
+        if (interpolatedValues.scale) obj3d.scale.fromArray(interpolatedValues.scale);
+        
+        if (mat) {
+            if (interpolatedValues.metalness !== undefined && mat.metalness !== undefined) mat.metalness = interpolatedValues.metalness;
+            if (interpolatedValues.roughness !== undefined && mat.roughness !== undefined) mat.roughness = interpolatedValues.roughness;
+            const opacity = interpolatedValues.opacity ?? 1.0;
+            if (mat.opacity !== undefined) mat.opacity = opacity;
+            if (mat.uniforms?.opacity) mat.uniforms.opacity.value = opacity;
+        }
+
+        if (objData.type === 'audio') {
+            const sound = obj3d.children.find(c => c instanceof THREE.PositionalAudio) as THREE.PositionalAudio;
+            if (sound && interpolatedValues.volume !== undefined) sound.setVolume(interpolatedValues.volume);
+        }
       }
 
       // 3. Apply Intro/Outro transitions
@@ -495,6 +480,10 @@ export class Engine {
              this.camera.fov = objData.fov;
              this.camera.updateProjectionMatrix();
         }
+        const lookAtPoint = new THREE.Vector3(0, 0, -1);
+        lookAtPoint.applyQuaternion(this.camera.quaternion);
+        lookAtPoint.add(this.camera.position);
+        this.controls.target.copy(lookAtPoint);
       }
     });
   }

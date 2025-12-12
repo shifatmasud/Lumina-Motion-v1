@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, Reorder, AnimatePresence, useDragControls } from 'framer-motion';
@@ -18,8 +19,8 @@ interface TimelineProps {
   setCurrentTime: (time: number) => void;
   totalDuration: number;
   onAddKeyframe: () => void;
-  selectedKeyframe: { id: string, property: string, index: number } | null;
-  onSelectKeyframe: (id: string, property: string, index: number) => void;
+  selectedKeyframe: { id: string, index: number } | null;
+  onSelectKeyframe: (id: string, index: number) => void;
   onRemoveKeyframe: () => void;
 }
 
@@ -109,8 +110,8 @@ const TimelineItem: React.FC<{
     onSplit: (id: string) => void;
     onDuplicate: (id: string) => void;
     onUpdateObject: (id: string, updates: Partial<SceneObject>) => void;
-    selectedKeyframe: { id: string, property: string, index: number } | null;
-    onSelectKeyframe: (id: string, property: string, index: number) => void;
+    selectedKeyframe: { id: string, index: number } | null;
+    onSelectKeyframe: (id: string, index: number) => void;
 }> = ({ obj, isSelected, pixelsPerSecond, onClick, onRemove, onSplit, onDuplicate, onUpdateObject, selectedKeyframe, onSelectKeyframe }) => {
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const [showMenu, setShowMenu] = useState(false);
@@ -137,7 +138,7 @@ const TimelineItem: React.FC<{
   
   const handleResetCamera = () => {
     onUpdateObject(obj.id, {
-        position: [4, 3, 6],
+        position: [0, 0, 6],
         rotation: [0, 0, 0],
         animations: [],
         fov: 60,
@@ -296,12 +297,12 @@ const TimelineItem: React.FC<{
                 </div>
 
                 {/* Keyframes visualization */}
-                {obj.animations?.flatMap(track => track.keyframes.map((kf, i) => ({ ...kf, property: track.property, index: i }))).map((kf, i) => {
-                  const isKfSelected = selectedKeyframe && selectedKeyframe.id === obj.id && selectedKeyframe.property === kf.property && selectedKeyframe.index === kf.index;
+                {obj.animations?.map((kf, index) => {
+                  const isKfSelected = selectedKeyframe?.id === obj.id && selectedKeyframe.index === index;
                   return (
                     <div 
-                        key={`${kf.property}-${i}-${kf.time}`} 
-                        onClick={(e) => { e.stopPropagation(); onSelectKeyframe(obj.id, kf.property, kf.index); }}
+                        key={`${obj.id}-${index}-${kf.time}`} 
+                        onClick={(e) => { e.stopPropagation(); onSelectKeyframe(obj.id, index); }}
                         style={{
                             position: 'absolute',
                             left: `${kf.time * pixelsPerSecond}px`,
