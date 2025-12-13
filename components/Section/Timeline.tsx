@@ -470,20 +470,15 @@ export const TimelineSequencer: React.FC<TimelineProps> = ({
 
     if (!timelineContainerRef.current) return;
     const scrollContainer = timelineContainerRef.current;
-    const rulerRect = e.currentTarget.getBoundingClientRect();
 
     isDraggingPlayhead.current = true;
     setIsScrubbing(true);
     if (isPlaying) onTogglePlay();
 
     const handleInteraction = (event: PointerEvent) => {
-        // Calculate click position relative to the ruler's visible area
-        const clickInRulerX = event.clientX - rulerRect.left;
-        
-        // Combine with scroll position to get click position in the full content
-        const contentX = scrollContainer.scrollLeft + clickInRulerX;
-        
-        // Subtract header width to get position relative to time 0
+        const scrollContainerRect = scrollContainer.getBoundingClientRect();
+        const clickInContainer = event.clientX - scrollContainerRect.left;
+        const contentX = scrollContainer.scrollLeft + clickInContainer;
         const timeAreaX = contentX - trackHeaderWidth;
 
         const newTime = Math.max(0, timeAreaX / pixelsPerSecond);
