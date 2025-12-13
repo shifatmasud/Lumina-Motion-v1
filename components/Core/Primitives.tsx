@@ -1,4 +1,5 @@
-import React from 'react';
+
+import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { CaretDown } from '@phosphor-icons/react';
 import { DesignSystem } from '../../theme';
@@ -18,6 +19,7 @@ interface SliderProps {
   step?: number;
   onChange: (val: number) => void;
   unit?: string;
+  resetValue?: number;
 }
 
 interface ToggleProps {
@@ -78,17 +80,67 @@ export const Button: React.FC<ButtonProps> = ({ children, as = 'button', variant
   );
 };
 
-export const Slider: React.FC<SliderProps> = ({ label, value, min = 0, max = 100, step = 1, onChange, unit }) => {
+export const Slider: React.FC<SliderProps> = ({ label, value, min = 0, max = 100, step = 1, onChange, unit, resetValue = 0 }) => {
   const displayValue = value ?? 0;
+  const numInputRef = useRef<HTMLInputElement>(null);
+  const [inputValue, setInputValue] = useState(displayValue.toFixed(step < 0.1 ? 2 : (step < 1 ? 1 : 0)));
+
+  useEffect(() => {
+    if (document.activeElement !== numInputRef.current) {
+      setInputValue(displayValue.toFixed(step < 0.1 ? 2 : (step < 1 ? 1 : 0)));
+    }
+  }, [displayValue, step]);
+
+  const commitValue = (valStr: string) => {
+    let numValue = parseFloat(valStr);
+    if (isNaN(numValue)) {
+      setInputValue(displayValue.toFixed(step < 0.1 ? 2 : (step < 1 ? 1 : 0))); // Revert
+      return;
+    }
+    if (min !== undefined) numValue = Math.max(min, numValue);
+    if (max !== undefined) numValue = Math.min(max, numValue);
+    onChange(numValue);
+  };
+
   return (
     <div 
       style={{ display: 'flex', flexDirection: 'column', gap: '6px', width: '100%' }}
       onPointerDown={(e) => e.stopPropagation()}
+      onDoubleClick={() => onChange(resetValue)}
     >
       {label && (
-        <div style={{ display: 'flex', justifyContent: 'space-between', ...DesignSystem.Type.Label.S, color: DesignSystem.Color.Base.Content[2] }}>
-          <span>{label}</span>
-          <span style={{ color: DesignSystem.Color.Base.Content[1] }}>{displayValue.toFixed(step < 0.1 ? 2 : 0)}{unit}</span>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', ...DesignSystem.Type.Label.S, color: DesignSystem.Color.Base.Content[2] }}>
+          <label onDoubleClick={(e) => e.stopPropagation()} style={{ cursor: 'default' }}>{label}</label>
+          <input
+            ref={numInputRef}
+            type="number"
+            value={inputValue}
+            min={min}
+            max={max}
+            step={step}
+            onChange={(e) => setInputValue(e.target.value)}
+            onBlur={() => commitValue(inputValue)}
+            onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+            onPointerDown={e => e.stopPropagation()}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: DesignSystem.Color.Base.Content[1],
+              textAlign: 'right',
+              fontFamily: DesignSystem.Type.Label.S.fontFamily,
+              fontSize: DesignSystem.Type.Label.S.fontSize,
+              width: '60px',
+              padding: '2px 4px',
+              borderRadius: '4px',
+              outline: 'none',
+              transition: 'background 0.2s',
+            }}
+            onFocus={(e) => {
+                e.target.style.background = DesignSystem.Color.Base.Surface[3];
+                e.target.select();
+            }}
+            onBlurCapture={(e) => e.target.style.background = 'transparent' }
+          />
         </div>
       )}
       <div style={{ position: 'relative', height: '16px', display: 'flex', alignItems: 'center' }}>
@@ -96,7 +148,7 @@ export const Slider: React.FC<SliderProps> = ({ label, value, min = 0, max = 100
         <div style={{ position: 'absolute', left: 0, right: 0, height: '2px', background: DesignSystem.Color.Base.Surface[3], borderRadius: DesignSystem.Effect.Radius.Full }} />
         <div style={{ position: 'absolute', left: 0, width: `${((displayValue - min) / (max - min)) * 100}%`, height: '2px', background: DesignSystem.Color.Accent.Surface[1], borderRadius: DesignSystem.Effect.Radius.Full, boxShadow: `0 0 10px ${DesignSystem.Color.Accent.Surface[1]}` }} />
       </div>
-      <style>{` input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 12px; width: 12px; border-radius: 50%; background: #fff; margin-top: -5px; box-shadow: 0 0 0 4px ${DesignSystem.Color.Base.Surface[1]}; cursor: pointer; transition: transform 0.1s; } input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.2); } input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 2px; cursor: pointer; background: transparent; } `}</style>
+      <style>{` input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 12px; width: 12px; border-radius: 50%; background: #fff; margin-top: -5px; box-shadow: 0 0 0 4px ${DesignSystem.Color.Base.Surface[1]}; cursor: pointer; transition: transform 0.1s; } input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.2); } input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 2px; cursor: pointer; background: transparent; } input[type=number] { -moz-appearance: textfield; } input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }`}</style>
     </div>
   );
 };

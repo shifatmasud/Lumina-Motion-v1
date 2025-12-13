@@ -18,6 +18,7 @@ interface WindowProps {
   onRedo?: () => void;
   isSnappingEnabled?: boolean;
   onToggleSnapping?: () => void;
+  onResetScene?: () => void;
 }
 
 // Context Menu Portal
@@ -27,7 +28,8 @@ const ContextMenu: React.FC<{
   windowId: string;
   isSnappingEnabled?: boolean;
   onToggleSnapping?: () => void;
-}> = ({ rect, onClose, windowId, isSnappingEnabled, onToggleSnapping }) => {
+  onResetScene?: () => void;
+}> = ({ rect, onClose, windowId, isSnappingEnabled, onToggleSnapping, onResetScene }) => {
   const handleItemClick = (action?: () => void) => {
     action?.();
     onClose();
@@ -62,6 +64,33 @@ const ContextMenu: React.FC<{
           gap: '2px'
         }}
       >
+        {windowId === 'props' && onResetScene && (
+            <>
+            <div 
+                onClick={() => handleItemClick(onResetScene)}
+                style={{ 
+                    padding: '8px 12px', 
+                    ...DesignSystem.Type.Label.S, 
+                    color: DesignSystem.Color.Feedback.Error,
+                    cursor: 'pointer',
+                    borderRadius: DesignSystem.Effect.Radius.S,
+                    transition: '0.1s',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: DesignSystem.Space(2)
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'rgba(255, 68, 68, 0.1)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'transparent';
+                }}
+            >
+                <ArrowCounterClockwise size={14} /> Reset Scene
+            </div>
+            <div style={{height: '1px', background: DesignSystem.Color.Base.Border[1], margin: '4px 6px'}} />
+            </>
+        )}
         {windowId === 'timeline' && onToggleSnapping && (
             <div 
                 onClick={() => handleItemClick(onToggleSnapping)}
@@ -126,6 +155,7 @@ export const Window: React.FC<WindowProps> = ({
   onRedo,
   isSnappingEnabled,
   onToggleSnapping,
+  onResetScene,
 }) => {
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const [showMenu, setShowMenu] = useState(false);
@@ -316,6 +346,7 @@ export const Window: React.FC<WindowProps> = ({
               windowId={id}
               isSnappingEnabled={isSnappingEnabled}
               onToggleSnapping={onToggleSnapping}
+              onResetScene={onResetScene}
             />
         )}
       </AnimatePresence>

@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import { v4 as uuidv4 } from 'uuid';
@@ -25,9 +26,12 @@ import {
   Diamond,
   Cylinder,
   Eye,
-  Lightbulb
+  Lightbulb,
+  Lock,
+  LockOpen
 } from '@phosphor-icons/react';
 import gsap from 'gsap';
+import yaml from 'js-yaml';
 
 import { DesignSystem } from './theme';
 import { Engine, SceneObject, GlobalSettings, TransitionEffect, TimelineKeyframe } from './engine';
@@ -48,6 +52,62 @@ const defaultTransition: TransitionEffect = {
   easing: 'power2.out',
 };
 
+const materialPresets: { [key: string]: Partial<SceneObject> } = {
+    'default': { metalness: 0.2, roughness: 0.1, transmission: 0, ior: 1.5, thickness: 0.5, clearcoat: 0, clearcoatRoughness: 0, opacity: 1 },
+    'clay': { metalness: 0, roughness: 1.0, transmission: 0, clearcoat: 0, ior: 1.4, opacity: 1 },
+    'glass': { metalness: 0, roughness: 0.02, transmission: 1.0, ior: 1.5, thickness: 1.2, clearcoat: 1.0, clearcoatRoughness: 0.05, opacity: 1 },
+    'frostedGlass': { metalness: 0, roughness: 0.45, transmission: 1.0, ior: 1.5, thickness: 1.2, clearcoat: 0.1, clearcoatRoughness: 0.1, opacity: 1 },
+    'metal': { metalness: 1.0, roughness: 0.1, transmission: 0, clearcoat: 0.5, clearcoatRoughness: 0.1, ior: 2.5, opacity: 1 },
+    'chrome': { metalness: 1.0, roughness: 0.0, transmission: 0, clearcoat: 1.0, clearcoatRoughness: 0.0, ior: 2.5, opacity: 1 },
+    'plastic': { metalness: 0.1, roughness: 0.5, transmission: 0, clearcoat: 0.5, clearcoatRoughness: 0.1, ior: 1.5, opacity: 1 },
+    'water': { metalness: 0.1, roughness: 0.1, transmission: 0.9, ior: 1.33, thickness: 1.0, clearcoat: 1.0, clearcoatRoughness: 0, opacity: 1 },
+};
+
+const INITIAL_OBJECTS: SceneObject[] = [
+    {
+      id: 'camera-main',
+      type: 'camera',
+      name: 'Main Camera',
+      position: [0, 0, 6],
+      rotation: [0, 0, 0],
+      scale: [1, 1, 1],
+      startTime: 0,
+      duration: 300,
+      animations: [],
+      introTransition: { ...defaultTransition },
+      outroTransition: { ...defaultTransition },
+      fov: 60
+    },
+    { 
+      id: '1', 
+      type: 'mesh', 
+      name: 'Cube',
+      position: [0, 0.5, 0], 
+      rotation: [0, 0, 0], 
+      scale: [1, 1, 1], 
+      color: '#ffffff',
+      ...materialPresets.default,
+      startTime: 0,
+      duration: 5,
+      animations: [],
+      introTransition: { ...defaultTransition },
+      outroTransition: { ...defaultTransition },
+    }
+];
+
+const INITIAL_GLOBAL_SETTINGS: GlobalSettings = {
+    backgroundColor: '#000000',
+    bloom: { enabled: false, strength: 0.2, threshold: 0.85, radius: 0.5 },
+    vignette: { enabled: false, offset: 1.0, darkness: 1.0 },
+    accentColor: DesignSystem.Color.Accent.Surface[1] as string,
+    showGrid: true,
+    showGround: true,
+    groundColor: '#050505',
+    ambientLight: { color: '#ffffff', intensity: 0.4 },
+    mainLight: { color: '#ffffff', intensity: 1.2, position: [5, 10, 7] },
+    rimLight: { enabled: true, color: DesignSystem.Color.Accent.Surface[1] as string, intensity: 5.0, position: [0, 0, 1] },
+};
+
 const ACCENT_COLORS = ['#FF4F1F', '#BEF264', '#5865F2'];
 
 const EASING_OPTIONS = [
@@ -61,24 +121,117 @@ const EASING_OPTIONS = [
   { label: 'Overshoot (Back Out)', value: 'back.out(1.7)' },
 ];
 
-const materialPresets: { [key: string]: Partial<SceneObject> } = {
-    'default': { metalness: 0.2, roughness: 0.1, transmission: 0, ior: 1.5, thickness: 0.5, clearcoat: 0, clearcoatRoughness: 0, opacity: 1 },
-    'clay': { metalness: 0, roughness: 1.0, transmission: 0, clearcoat: 0, ior: 1.4, opacity: 1 },
-    'glass': { metalness: 0, roughness: 0.02, transmission: 1.0, ior: 1.5, thickness: 1.2, clearcoat: 1.0, clearcoatRoughness: 0.05, opacity: 1 },
-    'frostedGlass': { metalness: 0, roughness: 0.45, transmission: 1.0, ior: 1.5, thickness: 1.2, clearcoat: 0.1, clearcoatRoughness: 0.1, opacity: 1 },
-    'metal': { metalness: 1.0, roughness: 0.1, transmission: 0, clearcoat: 0.5, clearcoatRoughness: 0.1, ior: 2.5, opacity: 1 },
-    'chrome': { metalness: 1.0, roughness: 0.0, transmission: 0, clearcoat: 1.0, clearcoatRoughness: 0.0, ior: 2.5, opacity: 1 },
-    'plastic': { metalness: 0.1, roughness: 0.5, transmission: 0, clearcoat: 0.5, clearcoatRoughness: 0.1, ior: 1.5, opacity: 1 },
-    'water': { metalness: 0.1, roughness: 0.1, transmission: 0.9, ior: 1.33, thickness: 1.0, clearcoat: 1.0, clearcoatRoughness: 0, opacity: 1 },
+const createYamlString = (settingsData: GlobalSettings, objectsData: SceneObject[]): string => {
+  // Helper to build a category object, returning undefined if it has no valid keys
+  const buildCategory = (data: object) => {
+    // This trick removes keys with `undefined` values
+    const cleaned = JSON.parse(JSON.stringify(data));
+    return Object.keys(cleaned).length > 0 ? cleaned : undefined;
+  };
+  
+  const scene = {
+    projectName: "My Lumina Scene",
+    version: "1.3-humane-yaml",
+    exportedAt: new Date().toISOString(),
+    settings: {
+      backgroundColor: settingsData.backgroundColor,
+      ground: { show: settingsData.showGround, color: settingsData.groundColor },
+      grid: { show: settingsData.showGrid },
+      lighting: {
+        ambient: settingsData.ambientLight,
+        main: settingsData.mainLight,
+        rim: settingsData.rimLight,
+      },
+      effects: {
+        bloom: settingsData.bloom,
+        vignette: settingsData.vignette,
+      },
+    },
+    timeline: objectsData.map(obj => {
+      const {
+        id, name, type, startTime, duration, position, rotation, scale,
+        animations, introTransition, outroTransition,
+        
+        url, width, height, color, opacity,
+        metalness, roughness, transmission, ior, thickness, clearcoat, clearcoatRoughness,
+        extrusion, pathLength, curvature,
+        volume, loop, chromaKey, fov
+      } = obj;
+      
+      const objectYaml: any = {
+        id,
+        name: name || `Unnamed ${type}`,
+        type,
+        timing: { start: startTime, duration },
+        transform: {
+          position: { x: position[0], y: position[1], z: position[2] },
+          rotation: { x: rotation[0], y: rotation[1], z: rotation[2] },
+          scale: { x: scale[0], y: scale[1], z: scale[2] },
+        },
+      };
+
+      // Conditionally add categories
+      objectYaml.appearance = buildCategory({ color, opacity });
+      objectYaml.material = buildCategory({ metalness, roughness, transmission, ior, thickness, clearcoat, clearcoatRoughness });
+      objectYaml.geometry = buildCategory({ extrusion, pathLength });
+      objectYaml.distortion = buildCategory({ cylinder_wrap: curvature });
+      objectYaml.media = buildCategory({ url, width, height, volume, loop });
+      objectYaml.effects = buildCategory({ chroma_key: chromaKey });
+      objectYaml.camera_settings = buildCategory({ fov });
+
+      if (animations && animations.length > 0) {
+        objectYaml.keyframes = animations.map(({ time, values, easing }) => ({
+          time,
+          values: JSON.parse(JSON.stringify(values)), // clean undefined
+          easing
+        }));
+      }
+
+      const transitions: any = {};
+      if (introTransition && introTransition.type !== 'none') transitions.intro = introTransition;
+      if (outroTransition && outroTransition.type !== 'none') transitions.outro = outroTransition;
+      if (Object.keys(transitions).length > 0) objectYaml.transitions = transitions;
+
+      return JSON.parse(JSON.stringify(objectYaml));
+    })
+  };
+
+  const header = `# 👋 Hello! This is a Lumina scene file.
+# It's a human-friendly recipe for your animation. You can edit this directly!
+#
+# --- STRUCTURE ---
+#
+# settings:       Global styles for the whole scene (background, lighting, effects).
+# timeline:       A list of all the objects (actors) in your scene.
+#
+# --- OBJECTS (in timeline) ---
+#
+# id:             A unique identifier for the object.
+# name:           The friendly name you see in the editor.
+# type:           What kind of object it is (mesh, video, camera, etc.).
+# timing:         When it appears (start) and for how long (duration), in seconds.
+# transform:      Its initial position, rotation, and scale.
+# appearance:     How it looks (color, opacity).
+# material:       Surface properties (metal, glass, plastic).
+# keyframes:      The animation script for this object over time.
+# transitions:    Special intro/outro effects.
+#
+# Enjoy creating!
+# --------------------------------------------------------------------------\n\n`;
+  
+  return header + yaml.dump(scene, { indent: 2, skipInvalid: true, noRefs: true });
 };
 
+
 const PropSlider = ({ label, value, onChange, isMode, ...props }: any) => {
+    const resetValue = label.toLowerCase().includes('scale') ? 1 : 0;
     return (
         <div style={{ position: 'relative', padding: isMode ? '4px' : '0', border: isMode ? `1px dashed ${DesignSystem.Color.Feedback.Warning}` : 'none', borderRadius: '8px', margin: isMode ? '-4px' : '0' }}>
              <Slider 
                   label={label} 
                   value={value} 
-                  onChange={onChange} 
+                  onChange={onChange}
+                  resetValue={resetValue}
                   {...props} 
              />
         </div>
@@ -94,56 +247,14 @@ const App = () => {
   const prevTimeRef = useRef(0);
 
   // --- State ---
-  const [accentColor, setAccentColor] = useState(DesignSystem.Color.Accent.Surface[1] as string); // Using DesignSystem for default
-  const [objects, setObjects] = useState<SceneObject[]>([
-    {
-      id: 'camera-main',
-      type: 'camera',
-      position: [0, 0, 6],
-      rotation: [0, 0, 0],
-      scale: [1, 1, 1],
-      startTime: 0,
-      duration: 300,
-      animations: [],
-      introTransition: { ...defaultTransition },
-      outroTransition: { ...defaultTransition },
-      fov: 60
-    },
-    { 
-      id: '1', 
-      type: 'mesh', 
-      position: [0, 0.5, 0], 
-      rotation: [0, 0, 0], 
-      scale: [1, 1, 1], 
-      color: '#ffffff',
-      metalness: 0.2,
-      roughness: 0.1,
-      opacity: 1,
-      transmission: 0, ior: 1.5, thickness: 0.5, clearcoat: 0, clearcoatRoughness: 0,
-      startTime: 0,
-      duration: 5,
-      animations: [],
-      introTransition: { ...defaultTransition },
-      outroTransition: { ...defaultTransition },
-    }
-  ]);
+  const [accentColor, setAccentColor] = useState(DesignSystem.Color.Accent.Surface[1] as string);
+  const [objects, setObjects] = useState<SceneObject[]>(JSON.parse(JSON.stringify(INITIAL_OBJECTS)));
   const [selectedId, setSelectedId] = useState<string | null>('1');
   
   // Selected Keyframe State: { objectId, keyframeIndex }
   const [selectedKeyframe, setSelectedKeyframe] = useState<{ id: string, index: number } | null>(null);
 
-  const [globalSettings, setGlobalSettings] = useState<GlobalSettings>({
-      backgroundColor: '#000000',
-      bloom: { enabled: false, strength: 0.2, threshold: 0.85, radius: 0.5 },
-      vignette: { enabled: false, offset: 1.0, darkness: 1.0 },
-      accentColor: DesignSystem.Color.Accent.Surface[1] as string,
-      showGrid: true,
-      showGround: true,
-      groundColor: '#050505',
-      ambientLight: { color: '#ffffff', intensity: 0.4 },
-      mainLight: { color: '#ffffff', intensity: 1.2, position: [5, 10, 7] },
-      rimLight: { color: DesignSystem.Color.Accent.Surface[1] as string, intensity: 5.0, position: [-5, 0, -5] },
-  });
+  const [globalSettings, setGlobalSettings] = useState<GlobalSettings>(JSON.parse(JSON.stringify(INITIAL_GLOBAL_SETTINGS)));
   
   // Timeline State
   const [totalDuration, setTotalDuration] = useState(10); // in seconds
@@ -155,6 +266,9 @@ const App = () => {
   const [showAssets, setShowAssets] = useState(false);
   const [showTimeline, setShowTimeline] = useState(true);
   const [showProperties, setShowProperties] = useState(true);
+
+  // Control State
+  const [isScaleLocked, setIsScaleLocked] = useState(false);
 
   // --- Effects ---
   // Theme Update
@@ -174,7 +288,6 @@ const App = () => {
     if (containerRef.current && !engineRef.current) {
       engineRef.current = new Engine(containerRef.current, (id) => {
         setSelectedId(id);
-        if (id) setShowProperties(true);
       });
     }
   }, []);
@@ -228,7 +341,11 @@ const App = () => {
   };
     
   const handleAddObject = (type: SceneObject['type'], url?: string, width?: number, height?: number) => {
-    const defaultName = type === 'mesh' ? 'Cube' : type === 'camera' ? 'Camera' : type === 'audio' ? 'Audio' : type === 'video' ? 'Video' : type === 'glb' ? 'Model' : 'Object';
+    const defaultNameMap = {
+        mesh: 'Cube', camera: 'Camera', audio: 'Audio', video: 'Video',
+        glb: 'Model', plane: 'Image', svg: 'SVG Shape'
+    };
+    const defaultName = defaultNameMap[type] || 'Object';
     
     const newObj: SceneObject = {
       id: uuidv4(), type,
@@ -236,8 +353,10 @@ const App = () => {
       position: [(Math.random() - 0.5) * 2, (Math.random() - 0.5) * 2, 0],
       rotation: [0, 0, 0], scale: [1, 1, 1], url,
       width, height,
-      color: type === 'mesh' ? accentColor : undefined,
-      ...materialPresets.default,
+      color: (type === 'mesh' || type === 'svg') ? accentColor : undefined,
+      extrusion: type === 'svg' ? 0.1 : undefined,
+      pathLength: type === 'svg' ? 1.0 : undefined,
+      ...(type === 'svg' ? materialPresets.plastic : materialPresets.default),
       opacity: 1.0,
       curvature: 0,
       volume: type === 'audio' || type === 'video' ? 1.0 : undefined,
@@ -277,7 +396,7 @@ const App = () => {
       };
       
       if (o.type !== 'camera') newValues.scale = [...o.scale] as [number, number, number];
-      if (o.type === 'mesh') {
+      if (o.type === 'mesh' || o.type === 'svg') {
         newValues.metalness = o.metalness;
         newValues.roughness = o.roughness;
         newValues.transmission = o.transmission;
@@ -285,8 +404,13 @@ const App = () => {
         newValues.thickness = o.thickness;
         newValues.clearcoat = o.clearcoat;
         newValues.clearcoatRoughness = o.clearcoatRoughness;
+        newValues.extrusion = o.extrusion;
+        if (o.type === 'svg') {
+          newValues.pathLength = o.pathLength;
+        }
       }
       if (o.type === 'audio' || o.type === 'video') newValues.volume = o.volume;
+
       newValues.opacity = o.opacity;
       newValues.curvature = o.curvature;
 
@@ -332,9 +456,38 @@ const App = () => {
     if (!selectedId || !materialPresets[presetKey]) return;
     handleUpdateObject(selectedId, materialPresets[presetKey]);
   };
+  
+  const handleResetScene = () => {
+      setAccentColor(DesignSystem.Color.Accent.Surface[1] as string);
+      setObjects(JSON.parse(JSON.stringify(INITIAL_OBJECTS)));
+      setGlobalSettings(JSON.parse(JSON.stringify(INITIAL_GLOBAL_SETTINGS)));
+      setSelectedId('1');
+      setCurrentTime(0);
+      setIsPlaying(false);
+      setSelectedKeyframe(null);
+  };
 
   const handleExportVideo = () => {
       alert("Video Export initiated... (Simulation)");
+  };
+
+  const handleExportYaml = () => {
+    try {
+        const yamlString = createYamlString(globalSettings, objects);
+        const blob = new Blob([yamlString], { type: 'text/yaml' });
+        const url = URL.createObjectURL(blob);
+
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'lumina-scene.yaml';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    } catch (e) {
+        console.error("Failed to generate YAML:", e);
+        alert("Sorry, there was an error exporting the YAML file.");
+    }
   };
 
   const selectedObject = objects.find(o => o.id === selectedId);
@@ -347,7 +500,10 @@ const App = () => {
       const type = file.type;
       const name = file.name.toLowerCase();
       
-      if (type.startsWith('image/') || name.endsWith('.svg')) {
+      if (name.endsWith('.svg')) {
+          handleAddObject('svg', url);
+      }
+      else if (type.startsWith('image/')) {
           const img = new Image();
           img.onload = () => {
             handleAddObject('plane', url, img.width, img.height);
@@ -380,7 +536,8 @@ const App = () => {
         position: objData.position, rotation: objData.rotation, scale: objData.scale,
         metalness: objData.metalness, roughness: objData.roughness, opacity: objData.opacity, volume: objData.volume,
         curvature: objData.curvature, transmission: objData.transmission, ior: objData.ior, thickness: objData.thickness,
-        clearcoat: objData.clearcoat, clearcoatRoughness: objData.clearcoatRoughness,
+        clearcoat: objData.clearcoat, clearcoatRoughness: objData.clearcoatRoughness, extrusion: objData.extrusion,
+        pathLength: objData.pathLength,
     };
     const baseKeyframe: TimelineKeyframe = { time: 0, values: {}, easing: 'power2.out' };
 
@@ -429,6 +586,27 @@ const App = () => {
   const handleControlChange = (property: string, value: any, axis?: number) => {
     if (!selectedId) return;
 
+    let finalValue = value;
+    
+    if (property === 'scale' && isScaleLocked && axis !== undefined && selectedObject) {
+        const baseScale = (selectedKeyframe && selectedKeyframe.id === selectedId)
+            ? (selectedObject.animations[selectedKeyframe.index]?.values?.scale || selectedObject.scale)
+            : selectedObject.scale;
+        
+        const oldValueForAxis = baseScale[axis];
+        const ratio = (oldValueForAxis !== 0 && oldValueForAxis !== undefined) ? value / oldValueForAxis : 1;
+        
+        const newScale: [number, number, number] = [
+            baseScale[0] * ratio,
+            baseScale[1] * ratio,
+            baseScale[2] * ratio
+        ];
+        newScale[axis] = value;
+        
+        finalValue = newScale;
+        axis = undefined; // Unset axis since we are now passing the full array
+    }
+
     if (selectedKeyframe && selectedKeyframe.id === selectedId) {
         setObjects(prev => prev.map(o => {
             if (o.id !== selectedId) return o;
@@ -437,13 +615,13 @@ const App = () => {
             const kfToUpdate = newAnims[selectedKeyframe.index];
             if (!kfToUpdate) return o;
 
-            let updatedValue = value;
+            let updatedValue = finalValue;
             if (axis !== undefined) {
                 const currentValue = (kfToUpdate.values[property as keyof typeof kfToUpdate.values] as [number, number, number]) || 
                                      (o[property as keyof SceneObject] as [number, number, number]) || 
                                      (property.includes('scale') ? [1, 1, 1] : [0, 0, 0]);
                 const newTuple = [...currentValue] as [number, number, number];
-                newTuple[axis] = value;
+                newTuple[axis] = finalValue;
                 updatedValue = newTuple;
             }
 
@@ -456,11 +634,11 @@ const App = () => {
     } else {
         setObjects(prev => prev.map(o => {
             if (o.id !== selectedId) return o;
-            let updatedValue = value;
+            let updatedValue = finalValue;
             if (axis !== undefined) {
                 const currentValue = (o[property as keyof SceneObject] as [number, number, number]) || (property.includes('scale') ? [1, 1, 1] : [0, 0, 0]);
                 const newTuple = [...currentValue] as [number, number, number];
-                newTuple[axis] = value;
+                newTuple[axis] = finalValue;
                 updatedValue = newTuple;
             }
             return { ...o, [property]: updatedValue };
@@ -524,9 +702,14 @@ const App = () => {
                 </label>
             </div>
             
-            <Button onClick={handleExportVideo} variant="primary" style={{ width: '100%', gap: '8px' }}>
-                <Export size={16} weight="bold" /> EXPORT VIDEO
-            </Button>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: DesignSystem.Space(2) }}>
+                <Button onClick={handleExportVideo} variant="primary" style={{ width: '100%', gap: '8px' }}>
+                    <Export size={16} weight="bold" /> VIDEO
+                </Button>
+                <Button onClick={handleExportYaml} variant="secondary" style={{ width: '100%', gap: '8px' }}>
+                    <Export size={16} weight="bold" /> YAML
+                </Button>
+            </div>
 
             <Divider />
             <div style={{ flex: 1, border: `1px dashed ${DesignSystem.Color.Base.Border[2]}`, borderRadius: DesignSystem.Effect.Radius.M, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '8px', color: DesignSystem.Color.Base.Content[3], background: 'rgba(255,255,255,0.01)', textAlign: 'center', padding: '12px' }}>
@@ -535,7 +718,7 @@ const App = () => {
          </div>
       </Window>
 
-      <Window id="props" title="CONTROLS" isOpen={showProperties} onClose={() => setShowProperties(false)} width={280}>
+      <Window id="props" title="CONTROLS" isOpen={showProperties} onClose={() => setShowProperties(false)} width={280} onResetScene={handleResetScene}>
         {selectedObject ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: DesignSystem.Space(3) }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: DesignSystem.Color.Base.Surface[2], padding: DesignSystem.Space(2), borderRadius: DesignSystem.Effect.Radius.M }}>
@@ -624,6 +807,16 @@ const App = () => {
                   {selectedObject.type !== 'camera' && selectedObject.type !== 'audio' && (
                     <>
                       <Divider />
+                       <div style={{ display: 'flex', alignItems: 'center', gap: DesignSystem.Space(2), padding: `0 ${DesignSystem.Space(1)}`, height: '16px' }}>
+                           <span style={{ ...DesignSystem.Type.Label.S, flex: 1, color: DesignSystem.Color.Base.Content[2] }}>SCALE</span>
+                           <button 
+                                onClick={() => setIsScaleLocked(!isScaleLocked)} 
+                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: isScaleLocked ? DesignSystem.Color.Accent.Surface[1] : DesignSystem.Color.Base.Content[3], padding: '4px' }}
+                                title={isScaleLocked ? "Unlock Scale Ratio" : "Lock Scale Ratio"}
+                           >
+                               {isScaleLocked ? <Lock size={14} weight="fill" /> : <LockOpen size={14} />}
+                           </button>
+                        </div>
                       <PropSlider 
                         label="SCALE X" 
                         value={getControlValue('scale', 0)}
@@ -667,7 +860,7 @@ const App = () => {
                   </Group>
                 )}
                 
-                {selectedObject.type === 'mesh' && (
+                {(selectedObject.type === 'mesh' || selectedObject.type === 'svg') && (
                     <Group title="MATERIAL" icon={<Palette />}>
                        <Select label="PRESET" onChange={e => handlePresetChange(e.target.value)} value="">
                           <option value="" disabled>Select a Preset...</option>
@@ -704,6 +897,12 @@ const App = () => {
                         isMode={selectedKeyframe?.id === selectedId}
                         min={0} max={1} step={0.01} 
                       />
+                       {selectedObject.type === 'svg' && (
+                         <>
+                           <PropSlider label="EXTRUSION" value={getControlValue('extrusion')} onChange={v => handleControlChange('extrusion', v)} min={0} max={10} step={0.01} isMode={selectedKeyframe?.id === selectedId} />
+                           <PropSlider label="PATH LENGTH" value={getControlValue('pathLength')} onChange={v => handleControlChange('pathLength', v)} min={0} max={1} step={0.01} isMode={selectedKeyframe?.id === selectedId} />
+                         </>
+                       )}
                       <Divider />
                       <PropSlider label="TRANSMISSION" value={getControlValue('transmission')} onChange={v => handleControlChange('transmission', v)} min={0} max={1} step={0.01} isMode={selectedKeyframe?.id === selectedId} />
                       <AnimatePresence>
@@ -899,11 +1098,18 @@ const App = () => {
                          <div>
                             <span style={{ ...DesignSystem.Type.Label.S, color: DesignSystem.Color.Base.Content[2], display: 'block', marginBottom: DesignSystem.Space(2) }}>RIM (SPOTLIGHT)</span>
                              <div style={{ display: 'flex', flexDirection: 'column', gap: DesignSystem.Space(2)}}>
-                                <Input label="COLOR" type="color" value={globalSettings.rimLight.color} onChange={e => handleLightSettingChange('rimLight', 'color', e.target.value)} />
-                                <Slider label="INTENSITY" value={globalSettings.rimLight.intensity} min={0} max={20} step={0.5} onChange={v => handleLightSettingChange('rimLight', 'intensity', v)} />
-                                <Slider label="POS X" value={globalSettings.rimLight.position[0]} min={-20} max={20} step={0.5} onChange={v => handleLightSettingChange('rimLight', 'position', v, 0)} />
-                                <Slider label="POS Y" value={globalSettings.rimLight.position[1]} min={-20} max={20} step={0.5} onChange={v => handleLightSettingChange('rimLight', 'position', v, 1)} />
-                                <Slider label="POS Z" value={globalSettings.rimLight.position[2]} min={-20} max={20} step={0.5} onChange={v => handleLightSettingChange('rimLight', 'position', v, 2)} />
+                                <Toggle label="ENABLE RIM LIGHT" value={globalSettings.rimLight.enabled} onChange={v => handleLightSettingChange('rimLight', 'enabled', v)} />
+                                <AnimatePresence>
+                                {globalSettings.rimLight.enabled && (
+                                    <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} style={{ display: 'flex', flexDirection: 'column', gap: DesignSystem.Space(2), overflow: 'hidden', marginTop: DesignSystem.Space(2) }}>
+                                        <Input label="COLOR" type="color" value={globalSettings.rimLight.color} onChange={e => handleLightSettingChange('rimLight', 'color', e.target.value)} />
+                                        <Slider label="INTENSITY" value={globalSettings.rimLight.intensity} min={0} max={20} step={0.5} onChange={v => handleLightSettingChange('rimLight', 'intensity', v)} />
+                                        <Slider label="POS X" value={globalSettings.rimLight.position[0]} min={-20} max={20} step={0.5} onChange={v => handleLightSettingChange('rimLight', 'position', v, 0)} />
+                                        <Slider label="POS Y" value={globalSettings.rimLight.position[1]} min={-20} max={20} step={0.5} onChange={v => handleLightSettingChange('rimLight', 'position', v, 1)} />
+                                        <Slider label="POS Z" value={globalSettings.rimLight.position[2]} min={-20} max={20} step={0.5} onChange={v => handleLightSettingChange('rimLight', 'position', v, 2)} />
+                                    </motion.div>
+                                )}
+                                </AnimatePresence>
                             </div>
                         </div>
                     </div>

@@ -1,19 +1,20 @@
 
+
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
+import { SVGLoader } from 'three/examples/jsm/loaders/SVGLoader';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { VignetteShader } from 'three/examples/jsm/shaders/VignetteShader.js';
-import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import gsap from 'gsap';
 
 export interface TimelineKeyframe {
   time: number; // in seconds, relative to the clip's start
   easing?: string; // for GSAP
-  values: Partial<Pick<SceneObject, 'position' | 'rotation' | 'scale' | 'metalness' | 'roughness' | 'volume' | 'opacity' | 'curvature' | 'transmission' | 'ior' | 'thickness' | 'clearcoat' | 'clearcoatRoughness'>>;
+  values: Partial<Pick<SceneObject, 'position' | 'rotation' | 'scale' | 'metalness' | 'roughness' | 'volume' | 'opacity' | 'curvature' | 'transmission' | 'ior' | 'thickness' | 'clearcoat' | 'clearcoatRoughness' | 'extrusion' | 'pathLength'>>;
 }
 
 export interface TransitionEffect {
@@ -30,7 +31,7 @@ export interface TransitionEffect {
 export interface SceneObject {
   id: string;
   name?: string;
-  type: 'mesh' | 'plane' | 'video' | 'glb' | 'audio' | 'camera';
+  type: 'mesh' | 'plane' | 'video' | 'glb' | 'audio' | 'camera' | 'svg';
   url?: string;
   width?: number;
   height?: number;
@@ -38,6 +39,8 @@ export interface SceneObject {
   rotation: [number, number, number];
   scale: [number, number, number];
   color?: string;
+  extrusion?: number;
+  pathLength?: number;
   metalness?: number;
   roughness?: number;
   opacity?: number;
@@ -73,7 +76,7 @@ export interface GlobalSettings {
   groundColor: string;
   ambientLight: { color: string; intensity: number; };
   mainLight: { color: string; intensity: number; position: [number, number, number]; };
-  rimLight: { color: string; intensity: number; position: [number, number, number]; };
+  rimLight: { enabled: boolean; color: string; intensity: number; position: [number, number, number]; };
 }
 
 const chromaKeyVertexShader = `
@@ -106,13 +109,16 @@ varying vec2 vUv;
 
 void main() {
   vec4 texColor = texture2D(map, vUv);
+  vec3 finalColor = texColor.rgb;
   float finalAlpha = texColor.a * opacity;
+
   if (chromaKeyEnabled) {
     float d = length(texColor.rgb - keyColor);
     float alpha = smoothstep(similarity, similarity + smoothness, d);
     finalAlpha *= alpha;
   }
-  gl_FragColor = vec4(texColor.rgb, finalAlpha);
+
+  gl_FragColor = vec4(finalColor, finalAlpha);
 }
 `;
 
@@ -131,6 +137,7 @@ export class Engine {
   vignettePass: ShaderPass;
   audioListener: THREE.AudioListener;
   gltfLoader: GLTFLoader;
+  svgLoader: SVGLoader;
   audioLoader: THREE.AudioLoader;
   ambientLight: THREE.AmbientLight;
   mainLight: THREE.DirectionalLight;
@@ -138,7 +145,6 @@ export class Engine {
   gridHelper: THREE.GridHelper;
   ground: THREE.Mesh;
   isUserControllingCamera: boolean = false;
-  pmremGenerator: THREE.PMREMGenerator;
   
   onSelect?: (id: string | null) => void;
 
@@ -150,6 +156,7 @@ export class Engine {
     this.pointer = new THREE.Vector2();
     this.raycaster = new THREE.Raycaster();
     this.gltfLoader = new GLTFLoader();
+    this.svgLoader = new SVGLoader();
     this.audioLoader = new THREE.AudioLoader();
 
     // Scene
@@ -186,16 +193,9 @@ export class Engine {
     this.renderer.toneMappingExposure = 1.0;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace; // CRITICAL for PBR
     this.renderer.shadowMap.enabled = true; // Enable shadows
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.renderer.shadowMap.type = THREE.VSMShadowMap;
     this.renderer.domElement.style.touchAction = 'none';
     container.appendChild(this.renderer.domElement);
-
-    // Environment for High Quality Materials
-    this.pmremGenerator = new THREE.PMREMGenerator(this.renderer);
-    this.pmremGenerator.compileEquirectangularShader();
-    const environment = new RoomEnvironment();
-    this.scene.environment = this.pmremGenerator.fromScene(environment).texture;
-    environment.dispose();
 
     // Post-processing
     this.composer = new EffectComposer(this.renderer);
@@ -227,12 +227,15 @@ export class Engine {
     this.mainLight.shadow.camera.right = 10;
     this.mainLight.shadow.camera.near = 0.5;
     this.mainLight.shadow.camera.far = 50;
+    this.mainLight.shadow.bias = -0.0005; 
+    this.mainLight.shadow.blurSamples = 16;
     this.scene.add(this.mainLight);
     
     this.rimLight = new THREE.SpotLight(0x5B50FF, 5);
     this.rimLight.position.set(-5, 0, -5);
     this.rimLight.lookAt(0,0,0);
     this.rimLight.castShadow = true;
+    this.rimLight.shadow.blurSamples = 16;
     this.scene.add(this.rimLight);
 
     // Controls
@@ -292,27 +295,128 @@ export class Engine {
     }
   }
 
-  createMesh(objData: SceneObject): THREE.Object3D {
-    let mesh: THREE.Object3D;
-    
-    if (objData.type === 'mesh') {
-      const geometry = new THREE.BoxGeometry(1, 1, 1);
-      const material = new THREE.MeshPhysicalMaterial({ 
+  updateSVGGeometry(mesh: THREE.Group, objData: SceneObject) {
+    const { svgPaths } = mesh.userData;
+    if (!svgPaths) return;
+
+    // 1. Clean up old geometry
+    mesh.traverse((child: any) => {
+        if (child.isMesh) {
+            child.geometry?.dispose();
+            if(Array.isArray(child.material)) {
+                child.material.forEach((m: THREE.Material) => m.dispose());
+            } else {
+                child.material?.dispose();
+            }
+        }
+    });
+    mesh.clear();
+
+    // 2. Prepare for new geometry
+    const material = new THREE.MeshPhysicalMaterial({
         color: objData.color || '#ffffff',
-        metalness: objData.metalness ?? 0.2,
-        roughness: objData.roughness ?? 0.1,
+        metalness: objData.metalness ?? 0.1,
+        roughness: objData.roughness ?? 0.4,
         transmission: objData.transmission ?? 0,
         ior: objData.ior ?? 1.5,
         thickness: objData.thickness ?? 0.5,
         clearcoat: objData.clearcoat ?? 0,
         clearcoatRoughness: objData.clearcoatRoughness ?? 0,
-        transparent: (objData.opacity ?? 1.0) < 1.0,
+        transparent: (objData.opacity ?? 1.0) < 1.0 || (objData.transmission ?? 0) > 0,
         opacity: objData.opacity ?? 1.0,
-        envMapIntensity: 1.0, 
-      });
-      mesh = new THREE.Mesh(geometry, material);
-      mesh.castShadow = true;
-      mesh.receiveShadow = true;
+        envMapIntensity: 1.0,
+        side: THREE.DoubleSide
+    });
+
+    const extrudeSettings = {
+        depth: objData.extrusion ?? 0.1,
+        bevelEnabled: false,
+        curveSegments: 32 // Increase for smoother curves
+    };
+    
+    const pathLength = objData.pathLength ?? 1.0;
+    const group = new THREE.Group();
+
+    for (const path of svgPaths) {
+        const shapes = SVGLoader.createShapes(path);
+
+        for (const shape of shapes) {
+            let shapeToExtrude = shape;
+
+            if (pathLength < 1.0) {
+                const points = shape.getPoints(50); // Use a fixed resolution for consistency
+                if (points.length < 2) continue;
+
+                const numPointsToShow = Math.floor(points.length * pathLength);
+
+                if (numPointsToShow < 2) continue; // Don't render a single point or nothing
+
+                const trimmedPoints = points.slice(0, numPointsToShow);
+                
+                // Create a "pie slice" wipe effect from the shape's center
+                const boundingBox = new THREE.Box2().setFromPoints(points);
+                const center = new THREE.Vector2();
+                boundingBox.getCenter(center);
+                
+                const finalPoints = [center, ...trimmedPoints];
+                shapeToExtrude = new THREE.Shape(finalPoints);
+            }
+            
+            const geometry = new THREE.ExtrudeGeometry(shapeToExtrude, extrudeSettings);
+            const svgMesh = new THREE.Mesh(geometry, material);
+            svgMesh.castShadow = true;
+            svgMesh.receiveShadow = true;
+            group.add(svgMesh);
+        }
+    }
+    
+    // 3. Normalize and center the entire group
+    const box = new THREE.Box3().setFromObject(group);
+    const size = new THREE.Vector3();
+    box.getSize(size);
+    const scale = 1.0 / Math.max(size.x, size.y, size.z);
+    if (isFinite(scale)) { // Avoid issues with empty geometry
+        group.scale.setScalar(scale);
+        const center = new THREE.Vector3();
+        box.getCenter(center);
+        group.position.sub(center.multiplyScalar(scale));
+    }
+
+    mesh.add(group);
+  }
+
+  createMesh(objData: SceneObject): THREE.Object3D {
+    let mesh: THREE.Object3D;
+    
+    if (objData.type === 'mesh') {
+        const geometry = new THREE.BoxGeometry(1, 1, 1);
+        const material = new THREE.MeshPhysicalMaterial({ 
+            color: objData.color || '#ffffff',
+            metalness: objData.metalness ?? 0.2,
+            roughness: objData.roughness ?? 0.1,
+            transmission: objData.transmission ?? 0,
+            ior: objData.ior ?? 1.5,
+            thickness: objData.thickness ?? 0.5,
+            clearcoat: objData.clearcoat ?? 0,
+            clearcoatRoughness: objData.clearcoatRoughness ?? 0,
+            transparent: (objData.opacity ?? 1.0) < 1.0,
+            opacity: objData.opacity ?? 1.0,
+            envMapIntensity: 1.0, 
+            side: THREE.DoubleSide
+        });
+        mesh = new THREE.Mesh(geometry, material);
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+    } else if (objData.type === 'svg') {
+        mesh = new THREE.Group();
+        if (objData.url) {
+            this.svgLoader.load(objData.url, (data) => {
+                mesh.userData.svgPaths = data.paths;
+                mesh.userData.currentExtrusion = objData.extrusion ?? 0.1;
+                mesh.userData.currentPathLength = objData.pathLength ?? 1.0;
+                this.updateSVGGeometry(mesh as THREE.Group, objData);
+            });
+        }
     } else if (objData.type === 'plane' || objData.type === 'video') {
        let planeWidth = 1.6;
        let planeHeight = 0.9;
@@ -355,7 +459,7 @@ export class Engine {
                    smoothness: { value: objData.chromaKey?.smoothness || 0.1 },
                    opacity: { value: objData.opacity ?? 1.0 },
                    curvature: { value: objData.curvature ?? 0.0 },
-                   chromaKeyEnabled: { value: objData.chromaKey?.enabled || false }
+                   chromaKeyEnabled: { value: objData.chromaKey?.enabled || false },
                },
                vertexShader: chromaKeyVertexShader,
                fragmentShader: chromaKeyFragmentShader,
@@ -492,6 +596,8 @@ export class Engine {
       let finalOpacity = objData.opacity ?? 1.0;
       let finalCurvature = objData.curvature ?? 0.0;
       let finalVolume = objData.volume ?? 1.0;
+      let finalExtrusion = objData.extrusion ?? 0.1;
+      let finalPathLength = objData.pathLength ?? 1.0;
 
       // Animation Interpolation
       if (objData.animations && objData.animations.length > 0) {
@@ -501,7 +607,7 @@ export class Engine {
             position: objData.position, rotation: objData.rotation, scale: objData.scale,
             metalness: finalMetalness, roughness: finalRoughness, opacity: finalOpacity, volume: finalVolume,
             curvature: finalCurvature, transmission: finalTransmission, ior: finalIor, thickness: finalThickness,
-            clearcoat: finalClearcoat, clearcoatRoughness: finalClearcoatRoughness,
+            clearcoat: finalClearcoat, clearcoatRoughness: finalClearcoatRoughness, extrusion: finalExtrusion, pathLength: finalPathLength,
         };
         const baseKeyframe: TimelineKeyframe = { time: 0, values: {}, easing: 'power2.out' };
         
@@ -538,6 +644,18 @@ export class Engine {
         if (kf1Values.opacity !== undefined && kf2Values.opacity !== undefined) finalOpacity = lerp(kf1Values.opacity, kf2Values.opacity);
         if (kf1Values.curvature !== undefined && kf2Values.curvature !== undefined) finalCurvature = lerp(kf1Values.curvature, kf2Values.curvature);
         if (kf1Values.volume !== undefined && kf2Values.volume !== undefined) finalVolume = lerp(kf1Values.volume, kf2Values.volume);
+        if (kf1Values.extrusion !== undefined && kf2Values.extrusion !== undefined) finalExtrusion = lerp(kf1Values.extrusion, kf2Values.extrusion);
+        if (kf1Values.pathLength !== undefined && kf2Values.pathLength !== undefined) finalPathLength = lerp(kf1Values.pathLength, kf2Values.pathLength);
+      }
+
+      // Geometry Update for SVG (if needed)
+      if (objData.type === 'svg' && obj3d.userData.svgPaths) {
+        const needsUpdate = obj3d.userData.currentExtrusion !== finalExtrusion || obj3d.userData.currentPathLength !== finalPathLength;
+        if(needsUpdate) {
+          this.updateSVGGeometry(obj3d as THREE.Group, { ...objData, extrusion: finalExtrusion, pathLength: finalPathLength });
+          obj3d.userData.currentExtrusion = finalExtrusion;
+          obj3d.userData.currentPathLength = finalPathLength;
+        }
       }
 
       // Apply Materials
@@ -553,8 +671,8 @@ export class Engine {
                 mat.clearcoat = finalClearcoat;
                 mat.clearcoatRoughness = finalClearcoatRoughness;
            }
-           if (mat instanceof THREE.ShaderMaterial && mat.uniforms.curvature) {
-               mat.uniforms.curvature.value = finalCurvature;
+           if (mat instanceof THREE.ShaderMaterial) {
+               if (mat.uniforms.curvature) mat.uniforms.curvature.value = finalCurvature;
            }
            
            // Universal Opacity
@@ -663,11 +781,13 @@ export class Engine {
         }
 
         unseen.delete(objData.id);
-
-        if (obj3d instanceof THREE.Mesh && (obj3d.material instanceof THREE.MeshPhysicalMaterial || obj3d.material instanceof THREE.MeshStandardMaterial)) {
-            obj3d.material.color.set(objData.color || '#ffffff');
-        }
-
+        
+        obj3d.traverse(child => {
+            if (child instanceof THREE.Mesh && (child.material instanceof THREE.MeshPhysicalMaterial)) {
+                 child.material.color.set(objData.color || '#ffffff');
+            }
+        });
+        
         if (objData.type === 'video') {
             const video = this.mediaElements.get(objData.id);
             if (video && video.loop !== (objData.loop ?? true)) {
@@ -676,21 +796,33 @@ export class Engine {
         }
         
         if (obj3d instanceof THREE.Mesh && obj3d.material instanceof THREE.ShaderMaterial && (objData.type === 'plane' || objData.type === 'video')) {
+            const material = obj3d.material;
             const chromaKey = objData.chromaKey;
-            const uniforms = obj3d.material.uniforms;
-
-            uniforms.chromaKeyEnabled.value = chromaKey?.enabled || false;
+            
+            material.uniforms.chromaKeyEnabled.value = chromaKey?.enabled || false;
             if (chromaKey) {
-                uniforms.keyColor.value.set(chromaKey.color);
-                uniforms.similarity.value = chromaKey.similarity;
-                uniforms.smoothness.value = chromaKey.smoothness;
+                material.uniforms.keyColor.value.set(chromaKey.color);
+                material.uniforms.similarity.value = chromaKey.similarity;
+                material.uniforms.smoothness.value = chromaKey.smoothness;
             }
         }
     });
 
     unseen.forEach(id => {
         const obj = this.objectsMap.get(id);
-        if (obj && obj.parent) { obj.parent.remove(obj); }
+        if (obj) {
+            obj.traverse((child: any) => {
+                if (child.isMesh) {
+                    child.geometry.dispose();
+                    if (Array.isArray(child.material)) {
+                        child.material.forEach((mat: THREE.Material) => mat.dispose());
+                    } else {
+                        child.material.dispose();
+                    }
+                }
+            });
+            if (obj.parent) { obj.parent.remove(obj); }
+        }
         this.objectsMap.delete(id);
 
         if (this.mediaElements.has(id)) {
@@ -724,6 +856,7 @@ export class Engine {
       this.mainLight.intensity = settings.mainLight.intensity;
       this.mainLight.position.fromArray(settings.mainLight.position);
 
+      this.rimLight.visible = settings.rimLight.enabled;
       this.rimLight.color.set(settings.rimLight.color);
       this.rimLight.intensity = settings.rimLight.intensity;
       this.rimLight.position.fromArray(settings.rimLight.position);
@@ -737,13 +870,12 @@ export class Engine {
   }
 
   animate() {
-    requestAnimationFrame(this.animate.bind(this));
+    requestAnimationFrame(() => this.animate());
     this.controls.update();
     this.composer.render();
   }
 
   dispose() {
       this.renderer.dispose();
-      this.pmremGenerator.dispose();
   }
 }
