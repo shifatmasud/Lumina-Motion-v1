@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import { v4 as uuidv4 } from 'uuid';
@@ -372,10 +373,10 @@ const App = () => {
         curvature: objData.curvature, transmission: objData.transmission, ior: objData.ior, thickness: objData.thickness,
         clearcoat: objData.clearcoat, clearcoatRoughness: objData.clearcoatRoughness,
     };
-    const baseKeyframe: TimelineKeyframe = { time: 0, values: {}, easing: keyframes[0]?.easing || 'power2.out' };
+    const baseKeyframe: TimelineKeyframe = { time: 0, values: {}, easing: 'power2.out' };
 
     let kf1 = baseKeyframe;
-    let kf2 = null;
+    let kf2: TimelineKeyframe | null = null;
     for (const kf of keyframes) {
         if (kf.time <= localTime) kf1 = kf;
         else { kf2 = kf; break; }
@@ -392,7 +393,7 @@ const App = () => {
 
     const duration = kf2.time - kf1.time;
     const progress = duration > 0 ? (localTime - kf1.time) / duration : 1;
-    const ease = gsap.parseEase(kf1.easing || 'power2.out');
+    const ease = gsap.parseEase(kf2.easing || 'power2.out');
     const easedProgress = ease(progress);
 
     return gsap.utils.interpolate(startVal, endVal, easedProgress);
@@ -971,7 +972,7 @@ const TransitionControls: React.FC<{
 
 const DockItem = ({ icon, label, isActive, onClick }: { icon: React.ReactNode, label: string, isActive: boolean, onClick: () => void }) => (
     <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}>
-        <motion.button onClick={onClick} whileHover={{ scale: 1.1, y: -4 }} whileTap={{ scale: 0.96 }} style={{ width: '44px', height: '44px', borderRadius: '14px', border: isActive ? `1px solid ${DesignSystem.Color.Accent.Surface[1]}` : `1px solid transparent`, background: isActive ? 'rgba(91, 80, 255, 0.15)' : 'rgba(255,255,255,0.03)', color: isActive ? DesignSystem.Color.Accent.Content[1] : DesignSystem.Color.Base.Content[2], display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px', cursor: 'pointer', boxShadow: isActive ? `0 0 24px ${DesignSystem.Color.Accent.Surface[1]}` : 'none', transition: 'border 0.2s, background 0.2s, box-shadow 0.2s' }}>
+        <motion.button onClick={onClick} whileHover={{ scale: 1.1, y: -4 }} whileTap={{ scale: 0.96 }} style={{ width: '44px', height: '44px', borderRadius: '14px', border: isActive ? `1px solid ${DesignSystem.Color.Accent.Surface[1]}` : `1px solid transparent`, background: 'rgba(255,255,255,0.03)', color: isActive ? DesignSystem.Color.Accent.Content[1] : DesignSystem.Color.Base.Content[2], display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px', cursor: 'pointer', boxShadow: isActive ? `0 0 24px ${DesignSystem.Color.Accent.Surface[1]}` : 'none', transition: 'border 0.2s, background 0.2s, box-shadow 0.2s' }}>
             {icon}
         </motion.button>
         {isActive && ( <motion.div layoutId="active-dot" style={{ position: 'absolute', bottom: '-8px', width: '3px', height: '3px', borderRadius: '50%', background: DesignSystem.Color.Accent.Surface[1], boxShadow: `0 0 8px ${DesignSystem.Color.Accent.Surface[1]}` }} /> )}

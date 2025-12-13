@@ -478,7 +478,7 @@ export class Engine {
             curvature: finalCurvature, transmission: finalTransmission, ior: finalIor, thickness: finalThickness,
             clearcoat: finalClearcoat, clearcoatRoughness: finalClearcoatRoughness,
         };
-        const baseKeyframe: TimelineKeyframe = { time: 0, values: {}, easing: keyframes[0].easing };
+        const baseKeyframe: TimelineKeyframe = { time: 0, values: {}, easing: 'power2.out' };
         
         let kf1: TimelineKeyframe = baseKeyframe;
         let kf2: TimelineKeyframe | null = null;
@@ -490,7 +490,7 @@ export class Engine {
 
         const duration = kf2.time - kf1.time;
         const progress = duration > 0 ? (localTime - kf1.time) / duration : 1;
-        const ease = gsap.parseEase(kf1.easing || 'power2.out');
+        const ease = gsap.parseEase(kf2.easing || 'power2.out');
         const easedProgress = ease(progress);
 
         const kf1Values = { ...baseState, ...kf1.values };
