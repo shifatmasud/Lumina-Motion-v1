@@ -7,12 +7,13 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { VignetteShader } from 'three/examples/jsm/shaders/VignetteShader.js';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import gsap from 'gsap';
 
 export interface TimelineKeyframe {
   time: number; // in seconds, relative to the clip's start
   easing?: string; // for GSAP
-  values: Partial<Pick<SceneObject, 'position' | 'rotation' | 'scale' | 'metalness' | 'roughness' | 'volume' | 'opacity' | 'curvature'>>;
+  values: Partial<Pick<SceneObject, 'position' | 'rotation' | 'scale' | 'metalness' | 'roughness' | 'volume' | 'opacity' | 'curvature' | 'transmission' | 'ior' | 'thickness' | 'clearcoat' | 'clearcoatRoughness'>>;
 }
 
 export interface TransitionEffect {
@@ -40,6 +41,11 @@ export interface SceneObject {
   metalness?: number;
   roughness?: number;
   opacity?: number;
+  transmission?: number;
+  ior?: number;
+  thickness?: number;
+  clearcoat?: number;
+  clearcoatRoughness?: number;
   curvature?: number; // Cylinder wrap distortion
   volume?: number; // For audio
   fov?: number; // For camera
@@ -123,6 +129,8 @@ export class Engine {
   audioLoader: THREE.AudioLoader;
   rimLight: THREE.SpotLight;
   gridHelper: THREE.GridHelper;
+  isUserControllingCamera: boolean = false;
+  pmremGenerator: THREE.PMREMGenerator;
   
   onSelect?: (id: string | null) => void;
 
@@ -162,6 +170,14 @@ export class Engine {
     this.renderer.domElement.style.touchAction = 'none';
     container.appendChild(this.renderer.domElement);
 
+    // Environment for High Quality Materials
+    this.pmremGenerator = new THREE.PMREMGenerator(this.renderer);
+    this.pmremGenerator.compileEquirectangularShader();
+    const environment = new RoomEnvironment();
+    this.scene.environment = this.pmremGenerator.fromScene(environment).texture;
+    // this.scene.background = new THREE.Color('#111'); // optional visual background
+    environment.dispose();
+
     // Post-processing
     this.composer = new EffectComposer(this.renderer);
     const renderPass = new RenderPass(this.scene, this.camera);
@@ -196,6 +212,7 @@ export class Engine {
     this.controls.dampingFactor = 0.05;
     this.controls.enableZoom = true;
     this.controls.enableRotate = true;
+    this.controls.addEventListener('start', () => { this.isUserControllingCamera = true; });
 
     // Events
     window.addEventListener('resize', this.onResize.bind(this));
@@ -222,15 +239,13 @@ export class Engine {
     this.pointer.y = -(event.clientY / window.innerHeight) * 2 + 1;
 
     this.raycaster.setFromCamera(this.pointer, this.camera);
-    const intersects = this.raycaster.intersectObjects(Array.from(this.objectsMap.values()), true); // Recursive for GLB/Groups
+    const intersects = this.raycaster.intersectObjects(Array.from(this.objectsMap.values()), true); 
 
     if (intersects.length > 0) {
-      // Find the top-level parent that exists in objectsMap
       let selected = intersects[0].object;
       let foundId: string | null = null;
       
       while(selected) {
-         // Check if this specific object is in our map
          for (const [id, obj] of this.objectsMap.entries()) {
              if (obj === selected) {
                  foundId = id;
@@ -242,8 +257,7 @@ export class Engine {
          else break;
       }
 
-      if (this.onSelect && foundId) this.onSelect(foundId);
-      else if (this.onSelect) this.onSelect(null);
+      if (this.onSelect) this.onSelect(foundId);
     } else {
        if (this.onSelect) this.onSelect(null);
     }
@@ -254,14 +268,22 @@ export class Engine {
     
     if (objData.type === 'mesh') {
       const geometry = new THREE.BoxGeometry(1, 1, 1);
+      // High Quality MeshPhysicalMaterial
       const material = new THREE.MeshPhysicalMaterial({ 
         color: objData.color || '#ffffff',
         metalness: objData.metalness ?? 0.2,
         roughness: objData.roughness ?? 0.1,
-        clearcoat: 0.8,
-        clearcoatRoughness: 0.1,
-        transparent: true,
+        transmission: objData.transmission ?? 0,
+        ior: objData.ior ?? 1.5,
+        thickness: objData.thickness ?? 0.5,
+        clearcoat: objData.clearcoat ?? 0,
+        clearcoatRoughness: objData.clearcoatRoughness ?? 0,
+        // Opacity vs Transmission logic:
+        // If transmission > 0, transparent usually must be false for index-of-refraction effects to look correct in Three.js,
+        // unless we want alpha fading. We will prioritize alpha fading if opacity < 1.
+        transparent: (objData.opacity ?? 1.0) < 1.0,
         opacity: objData.opacity ?? 1.0,
+        envMapIntensity: 1.0, 
       });
       mesh = new THREE.Mesh(geometry, material);
     } else if (objData.type === 'plane' || objData.type === 'video') {
@@ -269,15 +291,14 @@ export class Engine {
        let planeHeight = 0.9;
        if (objData.width && objData.height && objData.width > 0 && objData.height > 0) {
            const aspectRatio = objData.width / objData.height;
-           if (aspectRatio > 1) { // Landscape or square
+           if (aspectRatio > 1) { 
                planeWidth = 1.6;
                planeHeight = 1.6 / aspectRatio;
-           } else { // Portrait
+           } else { 
                planeHeight = 1.6;
                planeWidth = 1.6 * aspectRatio;
            }
        }
-       // Use more segments to allow vertex displacement bending
        const geometry = new THREE.PlaneGeometry(planeWidth, planeHeight, 32, 1);
        let material;
        let videoElement: HTMLVideoElement | null = null;
@@ -290,7 +311,7 @@ export class Engine {
                video.loop = objData.loop ?? true;
                video.crossOrigin = 'anonymous';
                video.playsInline = true;
-               video.muted = false; // Ensure video element is not muted. Volume is controlled by THREE.Audio
+               video.muted = false; 
                videoElement = video;
                this.mediaElements.set(objData.id, video);
                texture = new THREE.VideoTexture(video);
@@ -326,7 +347,6 @@ export class Engine {
        }
     } else if (objData.type === 'glb') {
         mesh = new THREE.Group();
-        // Placeholder box while loading
         const placeholder = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial({ wireframe: true, color: '#555' }));
         mesh.add(placeholder);
 
@@ -334,15 +354,32 @@ export class Engine {
             this.gltfLoader.load(objData.url, (gltf) => {
                 mesh.remove(placeholder);
                 mesh.add(gltf.scene);
-                // Center and Scale
                 const box = new THREE.Box3().setFromObject(gltf.scene);
                 const center = box.getCenter(new THREE.Vector3());
                 gltf.scene.position.sub(center);
+
+                // Initial material setup for GLB to ensure transparency works if opacity < 1
+                gltf.scene.traverse((child) => {
+                    if (child instanceof THREE.Mesh) {
+                         child.castShadow = true;
+                         child.receiveShadow = true;
+                         if (child.material) {
+                             const materials = Array.isArray(child.material) ? child.material : [child.material];
+                             materials.forEach(m => {
+                                 // Default to standard material properties if not physical
+                                 m.envMapIntensity = 1.0;
+                                 if (objData.opacity !== undefined && objData.opacity < 1.0) {
+                                     m.transparent = true;
+                                     m.opacity = objData.opacity;
+                                 }
+                             });
+                         }
+                    }
+                });
             });
         }
     } else if (objData.type === 'audio') {
         mesh = new THREE.Group();
-        // Helper Icon for Audio
         const iconGeo = new THREE.BoxGeometry(0.5, 0.5, 0.5);
         const iconMat = new THREE.MeshBasicMaterial({ color: '#00ff00', wireframe: true });
         const helper = new THREE.Mesh(iconGeo, iconMat);
@@ -367,7 +404,7 @@ export class Engine {
     return mesh;
   }
 
-  setTime(time: number, objects: SceneObject[], isPlaying: boolean) {
+  setTime(time: number, objects: SceneObject[], isPlaying: boolean, timeHasChanged: boolean) {
     if (!this.scene) return;
     
     objects.forEach(objData => {
@@ -379,7 +416,6 @@ export class Engine {
       
       const sound = obj3d.children.find(c => c instanceof THREE.Audio || c instanceof THREE.PositionalAudio) as THREE.Audio | THREE.PositionalAudio;
 
-      // Handle Video with Duo Mode (Scrub vs Play)
       if (objData.type === 'video') {
         const video = this.mediaElements.get(objData.id);
         if (video) {
@@ -387,25 +423,18 @@ export class Engine {
                 if (!video.paused) video.pause();
             } else {
                 const localTime = time - objData.startTime;
-                
-                if (isPlaying) { // PLAY MODE
+                if (isPlaying) { 
                     if (video.paused) {
-                        // Resync time before playing if it drifted while paused/scrubbed
-                        if (Math.abs(video.currentTime - localTime) > 0.2) {
-                            video.currentTime = localTime;
-                        }
+                        if (Math.abs(video.currentTime - localTime) > 0.2) video.currentTime = localTime;
                         video.play().catch(e => console.warn("Video autoplay failed.", e));
                     }
-                } else { // SCRUB MODE
+                } else { 
                     if (!video.paused) video.pause();
-                    if (Math.abs(video.currentTime - localTime) > 0.15) {
-                        video.currentTime = localTime;
-                    }
+                    if (Math.abs(video.currentTime - localTime) > 0.15) video.currentTime = localTime;
                 }
             }
         }
       } 
-      // Handle Standalone Audio
       else if (objData.type === 'audio' && sound instanceof THREE.PositionalAudio) {
         if (sound.buffer) {
           if (isVisible && isPlaying && !sound.isPlaying) {
@@ -422,32 +451,32 @@ export class Engine {
 
       const localTime = time - objData.startTime;
 
+      // Update Transform
       obj3d.position.fromArray(objData.position);
       obj3d.rotation.fromArray(objData.rotation.map(d => THREE.MathUtils.degToRad(d)));
       obj3d.scale.fromArray(objData.scale);
       
-      let mat: any = null;
-      if (obj3d instanceof THREE.Mesh) mat = obj3d.material;
-      
-      if (mat) {
-          if (mat instanceof THREE.MeshPhysicalMaterial) {
-            mat.metalness = objData.metalness ?? 0.2;
-            mat.roughness = objData.roughness ?? 0.1;
-          }
-          if (mat.opacity !== undefined) {
-             mat.opacity = objData.opacity ?? 1.0;
-          }
-          if (mat.uniforms?.opacity) {
-             mat.uniforms.opacity.value = objData.opacity ?? 1.0;
-          }
-      }
-      
+      // Calculate Interpolated Values
+      let finalMetalness = objData.metalness ?? 0.2;
+      let finalRoughness = objData.roughness ?? 0.1;
+      let finalTransmission = objData.transmission ?? 0;
+      let finalIor = objData.ior ?? 1.5;
+      let finalThickness = objData.thickness ?? 0.5;
+      let finalClearcoat = objData.clearcoat ?? 0;
+      let finalClearcoatRoughness = objData.clearcoatRoughness ?? 0;
+      let finalOpacity = objData.opacity ?? 1.0;
+      let finalCurvature = objData.curvature ?? 0.0;
+      let finalVolume = objData.volume ?? 1.0;
+
+      // Animation Interpolation
       if (objData.animations && objData.animations.length > 0) {
         const keyframes = [...objData.animations];
+        // Use current object state as defaults for keys not present
         const baseState: TimelineKeyframe['values'] = {
             position: objData.position, rotation: objData.rotation, scale: objData.scale,
-            metalness: objData.metalness, roughness: objData.roughness, opacity: objData.opacity, volume: objData.volume,
-            curvature: objData.curvature
+            metalness: finalMetalness, roughness: finalRoughness, opacity: finalOpacity, volume: finalVolume,
+            curvature: finalCurvature, transmission: finalTransmission, ior: finalIor, thickness: finalThickness,
+            clearcoat: finalClearcoat, clearcoatRoughness: finalClearcoatRoughness,
         };
         const baseKeyframe: TimelineKeyframe = { time: 0, values: {}, easing: keyframes[0].easing };
         
@@ -466,53 +495,67 @@ export class Engine {
 
         const kf1Values = { ...baseState, ...kf1.values };
         const kf2Values = { ...baseState, ...kf2.values };
-
-        const interpolatedValues: TimelineKeyframe['values'] = {};
-
-        for (const key in kf1Values) {
-            const prop = key as keyof TimelineKeyframe['values'];
-            const startVal = kf1Values[prop];
-            const endVal = kf2Values[prop];
-            if (startVal !== undefined && endVal !== undefined) {
-                 (interpolatedValues as any)[prop] = gsap.utils.interpolate(startVal, endVal, easedProgress);
-            }
-        }
-
-        if (interpolatedValues.position) obj3d.position.fromArray(interpolatedValues.position);
-        if (interpolatedValues.rotation) obj3d.rotation.fromArray(interpolatedValues.rotation.map(v => THREE.MathUtils.degToRad(v)));
-        if (interpolatedValues.scale) obj3d.scale.fromArray(interpolatedValues.scale);
         
-        if (mat) {
-            if (interpolatedValues.metalness !== undefined && mat.metalness !== undefined) mat.metalness = interpolatedValues.metalness;
-            if (interpolatedValues.roughness !== undefined && mat.roughness !== undefined) mat.roughness = interpolatedValues.roughness;
-            const opacity = interpolatedValues.opacity ?? 1.0;
-            if (mat.opacity !== undefined) mat.opacity = opacity;
-            if (mat.uniforms?.opacity) mat.uniforms.opacity.value = opacity;
-            
-            if (mat.uniforms?.curvature && interpolatedValues.curvature !== undefined) {
-                mat.uniforms.curvature.value = interpolatedValues.curvature;
-            }
-        }
+        // Helper to interpolate scalars
+        const lerp = (a: any, b: any) => gsap.utils.interpolate(a, b, easedProgress);
 
-        const finalVolume = interpolatedValues.volume ?? objData.volume ?? 1.0;
-        if ((objData.type === 'audio' || objData.type === 'video') && sound) {
-            if (sound.getVolume() !== finalVolume) {
-                sound.setVolume(finalVolume);
-            }
-        }
-      } else {
-        if (mat && mat.uniforms?.curvature) {
-             mat.uniforms.curvature.value = objData.curvature ?? 0.0;
-        }
+        if (kf1Values.position && kf2Values.position) obj3d.position.fromArray(lerp(kf1Values.position, kf2Values.position));
+        if (kf1Values.rotation && kf2Values.rotation) obj3d.rotation.fromArray(lerp(kf1Values.rotation, kf2Values.rotation).map((v: number) => THREE.MathUtils.degToRad(v)));
+        if (kf1Values.scale && kf2Values.scale) obj3d.scale.fromArray(lerp(kf1Values.scale, kf2Values.scale));
 
-        if ((objData.type === 'audio' || objData.type === 'video') && sound) {
-            const baseVolume = objData.volume ?? 1.0;
-            if (sound.getVolume() !== baseVolume) {
-                sound.setVolume(baseVolume);
-            }
-        }
+        if (kf1Values.metalness !== undefined && kf2Values.metalness !== undefined) finalMetalness = lerp(kf1Values.metalness, kf2Values.metalness);
+        if (kf1Values.roughness !== undefined && kf2Values.roughness !== undefined) finalRoughness = lerp(kf1Values.roughness, kf2Values.roughness);
+        if (kf1Values.transmission !== undefined && kf2Values.transmission !== undefined) finalTransmission = lerp(kf1Values.transmission, kf2Values.transmission);
+        if (kf1Values.ior !== undefined && kf2Values.ior !== undefined) finalIor = lerp(kf1Values.ior, kf2Values.ior);
+        if (kf1Values.thickness !== undefined && kf2Values.thickness !== undefined) finalThickness = lerp(kf1Values.thickness, kf2Values.thickness);
+        if (kf1Values.clearcoat !== undefined && kf2Values.clearcoat !== undefined) finalClearcoat = lerp(kf1Values.clearcoat, kf2Values.clearcoat);
+        if (kf1Values.clearcoatRoughness !== undefined && kf2Values.clearcoatRoughness !== undefined) finalClearcoatRoughness = lerp(kf1Values.clearcoatRoughness, kf2Values.clearcoatRoughness);
+        if (kf1Values.opacity !== undefined && kf2Values.opacity !== undefined) finalOpacity = lerp(kf1Values.opacity, kf2Values.opacity);
+        if (kf1Values.curvature !== undefined && kf2Values.curvature !== undefined) finalCurvature = lerp(kf1Values.curvature, kf2Values.curvature);
+        if (kf1Values.volume !== undefined && kf2Values.volume !== undefined) finalVolume = lerp(kf1Values.volume, kf2Values.volume);
       }
 
+      // Apply Materials
+      const updateMaterial = (mat: THREE.Material) => {
+           if (mat instanceof THREE.MeshPhysicalMaterial) {
+                mat.metalness = finalMetalness;
+                mat.roughness = finalRoughness;
+                mat.transmission = finalTransmission;
+                mat.ior = finalIor;
+                mat.thickness = finalThickness;
+                mat.clearcoat = finalClearcoat;
+                mat.clearcoatRoughness = finalClearcoatRoughness;
+           }
+           if (mat instanceof THREE.ShaderMaterial && mat.uniforms.curvature) {
+               mat.uniforms.curvature.value = finalCurvature;
+           }
+           
+           // Universal Opacity
+           mat.opacity = finalOpacity;
+           mat.transparent = finalOpacity < 1.0 || (mat instanceof THREE.MeshPhysicalMaterial && finalTransmission > 0.01);
+           if (mat instanceof THREE.ShaderMaterial && mat.uniforms.opacity) {
+                mat.uniforms.opacity.value = finalOpacity;
+           }
+      };
+
+      if (obj3d instanceof THREE.Mesh) {
+          if (Array.isArray(obj3d.material)) obj3d.material.forEach(updateMaterial);
+          else updateMaterial(obj3d.material);
+      } else {
+          obj3d.traverse((child) => {
+              if (child instanceof THREE.Mesh) {
+                  if (Array.isArray(child.material)) child.material.forEach(updateMaterial);
+                  else if (child.material) updateMaterial(child.material);
+              }
+          });
+      }
+
+      // Apply Volume
+      if ((objData.type === 'audio' || objData.type === 'video') && sound) {
+          if (sound.getVolume() !== finalVolume) sound.setVolume(finalVolume);
+      }
+
+      // Apply Transitions (Intro/Outro)
       const intro = objData.introTransition;
       if (intro && intro.type === 'custom') {
         const introTime = localTime - intro.delay;
@@ -521,9 +564,13 @@ export class Engine {
             const eased = gsap.parseEase(intro.easing)(progress);
             const invEased = 1 - eased;
             
-            if (intro.fade && mat) {
-                if (mat.opacity !== undefined) mat.opacity *= eased;
-                if (mat.uniforms?.opacity) mat.uniforms.opacity.value *= eased;
+            if (intro.fade) {
+                // Approximate fading by multiplying existing opacity
+                const fadeOpacity = finalOpacity * eased;
+                if (obj3d instanceof THREE.Mesh && !Array.isArray(obj3d.material)) {
+                     obj3d.material.opacity = fadeOpacity;
+                     if(obj3d.material instanceof THREE.ShaderMaterial) obj3d.material.uniforms.opacity.value = fadeOpacity;
+                }
             }
             obj3d.scale.multiplyScalar(invEased * intro.scale + eased * 1);
             obj3d.position.add(new THREE.Vector3().fromArray(intro.position).multiplyScalar(invEased));
@@ -541,9 +588,12 @@ export class Engine {
               const eased = gsap.parseEase(outro.easing)(progress);
               const invEased = 1- eased;
 
-              if (outro.fade && mat) {
-                if (mat.opacity !== undefined) mat.opacity *= invEased;
-                if (mat.uniforms?.opacity) mat.uniforms.opacity.value *= invEased;
+              if (outro.fade) {
+                 const fadeOpacity = finalOpacity * invEased;
+                 if (obj3d instanceof THREE.Mesh && !Array.isArray(obj3d.material)) {
+                     obj3d.material.opacity = fadeOpacity;
+                     if(obj3d.material instanceof THREE.ShaderMaterial) obj3d.material.uniforms.opacity.value = fadeOpacity;
+                 }
               }
               obj3d.scale.multiplyScalar(eased * outro.scale + invEased * 1);
               obj3d.position.add(new THREE.Vector3().fromArray(outro.position).multiplyScalar(eased));
@@ -553,17 +603,21 @@ export class Engine {
           }
       }
 
+      // Update Camera
       if (objData.type === 'camera') {
-        this.camera.position.copy(obj3d.position);
-        this.camera.rotation.copy(obj3d.rotation);
-        if (objData.fov && this.camera.fov !== objData.fov) {
-             this.camera.fov = objData.fov;
-             this.camera.updateProjectionMatrix();
+        if (!this.isUserControllingCamera || timeHasChanged) {
+            if (timeHasChanged) this.isUserControllingCamera = false;
+            this.camera.position.copy(obj3d.position);
+            this.camera.rotation.copy(obj3d.rotation);
+            if (objData.fov && this.camera.fov !== objData.fov) {
+                 this.camera.fov = objData.fov;
+                 this.camera.updateProjectionMatrix();
+            }
+            const lookAtPoint = new THREE.Vector3(0, 0, -1);
+            lookAtPoint.applyQuaternion(this.camera.quaternion);
+            lookAtPoint.add(this.camera.position);
+            this.controls.target.copy(lookAtPoint);
         }
-        const lookAtPoint = new THREE.Vector3(0, 0, -1);
-        lookAtPoint.applyQuaternion(this.camera.quaternion);
-        lookAtPoint.add(this.camera.position);
-        this.controls.target.copy(lookAtPoint);
       }
     });
   }
@@ -600,15 +654,10 @@ export class Engine {
             const uniforms = obj3d.material.uniforms;
 
             uniforms.chromaKeyEnabled.value = chromaKey?.enabled || false;
-            
             if (chromaKey) {
                 uniforms.keyColor.value.set(chromaKey.color);
                 uniforms.similarity.value = chromaKey.similarity;
                 uniforms.smoothness.value = chromaKey.smoothness;
-            }
-            
-            if (uniforms.curvature) {
-                uniforms.curvature.value = objData.curvature ?? 0.0;
             }
         }
     });
@@ -642,7 +691,6 @@ export class Engine {
       this.vignettePass.uniforms['darkness'].value = settings.vignette.darkness;
       
       this.rimLight.color.set(settings.accentColor);
-      
       this.gridHelper.visible = settings.showGrid;
   }
 
@@ -654,5 +702,6 @@ export class Engine {
 
   dispose() {
       this.renderer.dispose();
+      this.pmremGenerator.dispose();
   }
 }

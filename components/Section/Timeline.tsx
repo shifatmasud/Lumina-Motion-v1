@@ -1,9 +1,9 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { motion, Reorder, AnimatePresence, useDragControls } from 'framer-motion';
+import { motion, Reorder, AnimatePresence, useDragControls, useMotionValue, useTransform } from 'framer-motion';
 import { v4 as uuidv4 } from 'uuid';
-import { Play, Pause, Diamond, DotsSixVertical, Plus, DotsThreeVertical, Scissors, Copy, Trash, Camera as CameraIcon, ArrowCounterClockwise, SpeakerHigh, Cube, PencilSimple } from '@phosphor-icons/react';
+import { Play, Pause, Diamond, DotsSixVertical, DotsThreeVertical, Scissors, Copy, Trash, Camera as CameraIcon, ArrowCounterClockwise, SpeakerHigh, Cube, PencilSimple } from '@phosphor-icons/react';
 import { DesignSystem } from '../../theme';
 import { SceneObject } from '../../engine';
 import { Button } from '../Core/Primitives';
@@ -22,6 +22,7 @@ interface TimelineProps {
   selectedKeyframe: { id: string, index: number } | null;
   onSelectKeyframe: (id: string, index: number) => void;
   onRemoveKeyframe: () => void;
+  isSnappingEnabled: boolean;
 }
 
 const CONTEXT_MENU_Z_INDEX = 9999;
@@ -114,7 +115,8 @@ const TimelineItem: React.FC<{
     onUpdateObject: (id: string, updates: Partial<SceneObject>) => void;
     selectedKeyframe: { id: string, index: number } | null;
     onSelectKeyframe: (id: string, index: number) => void;
-}> = ({ obj, isSelected, pixelsPerSecond, onClick, onRemove, onSplit, onDuplicate, onUpdateObject, selectedKeyframe, onSelectKeyframe }) => {
+    isSnappingEnabled: boolean;
+}> = ({ obj, isSelected, pixelsPerSecond, onClick, onRemove, onSplit, onDuplicate, onUpdateObject, selectedKeyframe, onSelectKeyframe, isSnappingEnabled }) => {
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const [showMenu, setShowMenu] = useState(false);
   const [menuRect, setMenuRect] = useState<DOMRect | null>(null);
@@ -136,8 +138,8 @@ const TimelineItem: React.FC<{
     if (isLocked) return;
     const offsetSeconds = info.offset.x / pixelsPerSecond;
     const rawNewTime = obj.startTime + offsetSeconds;
-    const snappedTime = Math.round(rawNewTime / SNAP_INTERVAL) * SNAP_INTERVAL;
-    onUpdateObject(obj.id, { startTime: Math.max(0, snappedTime) });
+    const finalTime = isSnappingEnabled ? Math.round(rawNewTime / SNAP_INTERVAL) * SNAP_INTERVAL : rawNewTime;
+    onUpdateObject(obj.id, { startTime: Math.max(0, finalTime) });
   };
   
   const handleResetCamera = () => {
@@ -167,7 +169,6 @@ const TimelineItem: React.FC<{
     <Reorder.Item 
         value={obj} 
         id={obj.id}
-        // Removed drag={!isLocked} - Reorder.Item should be solely controlled by dragControls when dragListener is false.
         style={{ listStyle: 'none', position: 'relative', height: '48px', width: '100%' }}
         dragListener={false}
         dragControls={dragControls}
@@ -196,7 +197,6 @@ const TimelineItem: React.FC<{
         >
             <div style={{ display: 'flex', alignItems: 'center', gap: DesignSystem.Space(2), overflow: 'hidden', flex: 1 }}>
                 <motion.div 
-                    // Explicitly prevent default browser scroll behavior and stop event propagation
                     onPointerDown={(e) => { 
                         e.stopPropagation(); 
                         e.preventDefault();
@@ -207,7 +207,7 @@ const TimelineItem: React.FC<{
                         color: DesignSystem.Color.Base.Content[3], 
                         padding: '4px', 
                         opacity: isLocked ? 0.3 : 1,
-                        touchAction: 'none' // Explicitly disable touch-scrolling on this element
+                        touchAction: 'none'
                     }}
                     className="drag-handle"
                     whileHover={{ color: DesignSystem.Color.Base.Content[1] }}
@@ -316,7 +316,9 @@ const TimelineItem: React.FC<{
                             onDragEnd={(_, info) => {
                                 const offsetSeconds = info.offset.x / pixelsPerSecond;
                                 const rawNewStartTime = obj.startTime + offsetSeconds;
-                                const snappedStartTime = Math.max(0, Math.round(rawNewStartTime / SNAP_INTERVAL) * SNAP_INTERVAL);
+                                const snappedStartTime = isSnappingEnabled
+                                    ? Math.max(0, Math.round(rawNewStartTime / SNAP_INTERVAL) * SNAP_INTERVAL)
+                                    : Math.max(0, rawNewStartTime);
                                 const endTime = obj.startTime + obj.duration;
                                 const newDuration = endTime - snappedStartTime;
 
@@ -334,7 +336,9 @@ const TimelineItem: React.FC<{
                             onDragEnd={(_, info) => {
                                 const offsetSeconds = info.offset.x / pixelsPerSecond;
                                 const rawNewDuration = obj.duration + offsetSeconds;
-                                const snappedDuration = Math.round(rawNewDuration / SNAP_INTERVAL) * SNAP_INTERVAL;
+                                const snappedDuration = isSnappingEnabled
+                                    ? Math.round(rawNewDuration / SNAP_INTERVAL) * SNAP_INTERVAL
+                                    : rawNewDuration;
 
                                 if (snappedDuration >= SNAP_INTERVAL) {
                                     onUpdateObject(obj.id, { duration: snappedDuration });
@@ -356,26 +360,37 @@ const TimelineItem: React.FC<{
                 {obj.animations?.map((kf, index) => {
                   const isKfSelected = selectedKeyframe?.id === obj.id && selectedKeyframe.index === index;
                   return (
-                    <div 
-                        key={`${obj.id}-${index}-${kf.time}`} 
-                        onClick={(e) => { e.stopPropagation(); onSelectKeyframe(obj.id, index); }}
+                    <div
+                      key={`${obj.id}-${index}-${kf.time}`}
+                      onClick={(e) => { e.stopPropagation(); onSelectKeyframe(obj.id, index); }}
+                      style={{
+                        position: 'absolute',
+                        left: `${kf.time * pixelsPerSecond}px`,
+                        bottom: '-5px',
+                        width: '24px',
+                        height: '24px',
+                        transform: 'translateX(-50%)',
+                        cursor: 'pointer',
+                        zIndex: 10,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <div
                         style={{
-                            position: 'absolute',
-                            left: `${kf.time * pixelsPerSecond}px`,
-                            bottom: '4px',
-                            transform: 'translateX(-50%) rotate(45deg)',
-                            width: isKfSelected ? '10px' : '6px', 
-                            height: isKfSelected ? '10px' : '6px',
-                            background: isKfSelected ? DesignSystem.Color.Feedback.Warning : '#fff',
-                            border: isKfSelected ? `2px solid ${DesignSystem.Color.Base.Surface[1]}` : 'none',
-                            borderRadius: '1px',
-                            boxShadow: '0 1px 2px rgba(0,0,0,0.5)',
-                            zIndex: 10,
-                            cursor: 'pointer',
-                            transition: 'all 0.1s'
-                        }} 
-                    />
-                  )
+                          transform: 'rotate(45deg)',
+                          width: isKfSelected ? '10px' : '6px',
+                          height: isKfSelected ? '10px' : '6px',
+                          background: isKfSelected ? DesignSystem.Color.Feedback.Warning : '#fff',
+                          border: isKfSelected ? `2px solid ${DesignSystem.Color.Base.Surface[1]}` : 'none',
+                          borderRadius: '1px',
+                          boxShadow: '0 1px 2px rgba(0,0,0,0.5)',
+                          transition: 'all 0.1s',
+                        }}
+                      />
+                    </div>
+                  );
                 })}
             </motion.div>
         </div>
@@ -400,11 +415,24 @@ const TimelineItem: React.FC<{
 
 export const TimelineSequencer: React.FC<TimelineProps> = ({ 
     objects, setObjects, selectedId, onSelect, isPlaying, onTogglePlay,
-    currentTime, setCurrentTime, totalDuration, onAddKeyframe, selectedKeyframe, onSelectKeyframe, onRemoveKeyframe
+    currentTime, setCurrentTime, totalDuration, onAddKeyframe, selectedKeyframe, 
+    onSelectKeyframe, onRemoveKeyframe, isSnappingEnabled
 }) => {
   const pixelsPerSecond = 100;
   const trackHeaderWidth = 160;
   const timelineContainerRef = useRef<HTMLDivElement>(null);
+  const rulerRef = useRef<HTMLDivElement>(null);
+  const isDraggingPlayhead = useRef(false);
+  const [isScrubbing, setIsScrubbing] = useState(false);
+  
+  // Use motion values for smooth, non-render-blocking playhead animation
+  const motionCurrentTime = useMotionValue(currentTime);
+  const playheadX = useTransform(motionCurrentTime, (time) => time * pixelsPerSecond);
+
+  useEffect(() => {
+    // Sync motion value when currentTime prop changes from state
+    motionCurrentTime.set(currentTime);
+  }, [currentTime, motionCurrentTime]);
   
   const handleRemoveObject = (id: string) => {
     setObjects(prev => prev.filter(obj => obj.id !== id));
@@ -435,15 +463,56 @@ export const TimelineSequencer: React.FC<TimelineProps> = ({
       
       setObjects(prev => prev.map(o => o.id === idToSplit ? newObject1 : o).concat(newObject2));
   };
+
+  const onScrubberPointerDown = useCallback((e: React.PointerEvent<HTMLElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (!timelineContainerRef.current) return;
+    const scrollContainer = timelineContainerRef.current;
+    const rulerRect = e.currentTarget.getBoundingClientRect();
+
+    isDraggingPlayhead.current = true;
+    setIsScrubbing(true);
+    if (isPlaying) onTogglePlay();
+
+    const handleInteraction = (event: PointerEvent) => {
+        // Calculate click position relative to the ruler's visible area
+        const clickInRulerX = event.clientX - rulerRect.left;
+        
+        // Combine with scroll position to get click position in the full content
+        const contentX = scrollContainer.scrollLeft + clickInRulerX;
+        
+        // Subtract header width to get position relative to time 0
+        const timeAreaX = contentX - trackHeaderWidth;
+
+        const newTime = Math.max(0, timeAreaX / pixelsPerSecond);
+        
+        const finalTime = isSnappingEnabled ? Math.round(newTime / SNAP_INTERVAL) * SNAP_INTERVAL : newTime;
+
+        const clampedTime = Math.min(finalTime, totalDuration);
+        setCurrentTime(clampedTime);
+    };
+    
+    handleInteraction(e as PointerEvent);
+
+    const onPointerMove = (moveEvent: PointerEvent) => {
+        if (isDraggingPlayhead.current) {
+            handleInteraction(moveEvent);
+        }
+    };
+    
+    const onPointerUp = () => {
+        isDraggingPlayhead.current = false;
+        setIsScrubbing(false);
+        window.removeEventListener('pointermove', onPointerMove);
+        window.removeEventListener('pointerup', onPointerUp);
+    };
+    
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', onPointerUp);
+  }, [isPlaying, onTogglePlay, pixelsPerSecond, setCurrentTime, totalDuration, isSnappingEnabled]);
   
-  const handleRulerClick = (e: React.MouseEvent<HTMLDivElement>) => {
-      const rect = e.currentTarget.getBoundingClientRect();
-      if (!timelineContainerRef.current) return;
-      const clickX = e.clientX - rect.left; 
-      const timeX = (clickX) - trackHeaderWidth; 
-      const newTime = Math.max(0, timeX / pixelsPerSecond);
-      setCurrentTime(newTime);
-  };
 
   useEffect(() => {
       if (isPlaying && timelineContainerRef.current) {
@@ -457,8 +526,26 @@ export const TimelineSequencer: React.FC<TimelineProps> = ({
       }
   }, [currentTime, isPlaying, pixelsPerSecond]);
 
-  const rulerWidth = totalDuration * pixelsPerSecond;
-  const totalWidth = rulerWidth + trackHeaderWidth;
+  const totalWidth = totalDuration * pixelsPerSecond + trackHeaderWidth;
+
+  const renderRulerTicks = () => {
+    const ticks = [];
+    for (let i = 0; i <= totalDuration; i++) {
+        // Major Tick (Seconds)
+        ticks.push(
+            <div key={i} style={{ position: 'absolute', left: i * pixelsPerSecond, top: 0, height: '100%', pointerEvents: 'none', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', borderLeft: `1px solid ${DesignSystem.Color.Base.Content[3]}` }}>
+                <span style={{ marginLeft: '4px', marginBottom: '2px', fontSize: '9px', fontFamily: DesignSystem.Type.Label.S.fontFamily, color: DesignSystem.Color.Base.Content[3], fontWeight: 500 }}>{i}s</span>
+            </div>
+        );
+        // Half-second tick (Minimalist)
+        if (i < totalDuration) {
+             ticks.push(
+                <div key={`${i}-half`} style={{ position: 'absolute', left: (i + 0.5) * pixelsPerSecond, bottom: 0, width: '1px', height: '6px', background: DesignSystem.Color.Base.Content[3], opacity: 0.3 }} />
+            );
+        }
+    }
+    return ticks;
+  };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: DesignSystem.Color.Base.Surface[1], userSelect: 'none' }}>
@@ -501,21 +588,23 @@ export const TimelineSequencer: React.FC<TimelineProps> = ({
                 overscrollBehavior: 'none' 
             }}
         >
-            <div style={{ minWidth: `${totalWidth}px`, height: '100%', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ minWidth: `${totalWidth}px`, height: '100%', display: 'flex', flexDirection: 'column', position: 'relative' }}>
                 
-                {/* Sticky Ruler */}
+                {/* Sticky Ruler & Playhead Container */}
                 <div 
-                    onClick={handleRulerClick}
+                    ref={rulerRef}
+                    onPointerDown={onScrubberPointerDown}
                     style={{ 
                         position: 'sticky', 
                         top: 0, 
-                        height: '32px', 
+                        height: '40px', /* Increased height for better interaction */
                         background: DesignSystem.Color.Base.Surface[2], 
                         borderBottom: `1px solid ${DesignSystem.Color.Base.Border[1]}`, 
                         display: 'flex', 
-                        zIndex: 20,
-                        cursor: 'crosshair',
-                        width: '100%' 
+                        zIndex: 30, // Higher than tracks
+                        width: '100%',
+                        cursor: 'ew-resize',
+                        touchAction: 'none' 
                     }}
                 >
                     {/* Corner */}
@@ -526,7 +615,7 @@ export const TimelineSequencer: React.FC<TimelineProps> = ({
                         background: DesignSystem.Color.Base.Surface[2],
                         position: 'sticky',
                         left: 0,
-                        zIndex: 21,
+                        zIndex: 31,
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
@@ -538,32 +627,50 @@ export const TimelineSequencer: React.FC<TimelineProps> = ({
                     </div>
 
                     {/* Time Marks */}
-                    <div style={{ flex: 1, position: 'relative' }}>
-                         {Array.from({ length: totalDuration + 1 }).map((_, i) => (
-                            <div key={i} style={{ 
-                                position: 'absolute', 
-                                left: `${i * pixelsPerSecond}px`, 
-                                top: 0, 
-                                bottom: 0, 
-                                display: 'flex', 
-                                flexDirection: 'column',
-                                alignItems: 'flex-start'
-                            }}>
-                                <div style={{ height: '8px', width: '1px', background: 'rgba(255,255,255,0.3)' }} />
-                                <span style={{ marginLeft: '4px', fontSize: '9px', fontFamily: 'monospace', color: DesignSystem.Color.Base.Content[3] }}>{i}s</span>
-                            </div>
-                        ))}
-                         {Array.from({ length: totalDuration * 4 }).map((_, i) => (
-                            <div key={`sub-${i}`} style={{ 
-                                position: 'absolute', 
-                                left: `${i * (pixelsPerSecond / 4)}px`, 
-                                top: 0, 
-                                height: '4px', 
-                                width: '1px', 
-                                background: 'rgba(255,255,255,0.1)' 
-                            }} />
-                        ))}
+                    <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
+                         {renderRulerTicks()}
                     </div>
+
+                    {/* PLAYHEAD (Fixed in Ruler) */}
+                    <motion.div
+                        style={{
+                            position: 'absolute',
+                            left: `calc(${trackHeaderWidth}px - 12px)`,
+                            top: 0,
+                            bottom: 0,
+                            x: playheadX,
+                            width: '24px',
+                            zIndex: 50,
+                            overflow: 'visible',
+                            pointerEvents: 'none',
+                        }}
+                    >
+                        {/* Line */}
+                        <div style={{
+                            position: 'absolute',
+                            left: '12px',
+                            top: '32px',
+                            width: '1px',
+                            height: '9999px',
+                            background: DesignSystem.Color.Accent.Surface[1],
+                            boxShadow: `0 0 4px ${DesignSystem.Color.Accent.Surface[1]}`,
+                            opacity: 0.8
+                        }} />
+
+                        {/* Diamond Handle */}
+                        <div style={{
+                            position: 'absolute',
+                            top: '15px',
+                            left: '7px',
+                            width: '10px',
+                            height: '10px',
+                            transform: 'rotate(45deg)',
+                            background: DesignSystem.Color.Accent.Surface[1],
+                            borderRadius: '2px',
+                            border: `1px solid ${DesignSystem.Color.Base.Surface[1]}`,
+                            boxShadow: '0 2px 4px rgba(0,0,0,0.5)'
+                        }} />
+                    </motion.div>
                 </div>
 
                 {/* Tracks Area */}
@@ -582,34 +689,6 @@ export const TimelineSequencer: React.FC<TimelineProps> = ({
                         ))}
                     </div>
 
-                    {/* Playhead Line */}
-                    <motion.div 
-                        style={{
-                            position: 'absolute',
-                            left: `${trackHeaderWidth}px`,
-                            top: 0, 
-                            bottom: 0,
-                            width: '1px',
-                            background: DesignSystem.Color.Accent.Surface[1],
-                            zIndex: 15,
-                            pointerEvents: 'none',
-                            x: currentTime * pixelsPerSecond,
-                            boxShadow: `0 0 8px ${DesignSystem.Color.Accent.Surface[1]}`
-                        }}
-                    >
-                        <div style={{ 
-                            position: 'absolute', 
-                            top: '-5px', 
-                            left: '-5px', 
-                            width: '11px', 
-                            height: '11px', 
-                            background: DesignSystem.Color.Accent.Surface[1], 
-                            transform: 'rotate(45deg)', 
-                            borderRadius: '2px', 
-                            boxShadow: '0 2px 4px rgba(0,0,0,0.5)' 
-                        }} />
-                    </motion.div>
-
                     {/* Sortable Tracks */}
                     <Reorder.Group axis="y" values={objects} onReorder={setObjects} style={{ margin: 0, padding: 0, minHeight: '100px' }}>
                         {objects.map(obj => (
@@ -625,6 +704,7 @@ export const TimelineSequencer: React.FC<TimelineProps> = ({
                                 onUpdateObject={handleUpdateObject}
                                 selectedKeyframe={selectedKeyframe}
                                 onSelectKeyframe={onSelectKeyframe}
+                                isSnappingEnabled={isSnappingEnabled}
                             />
                         ))}
                     </Reorder.Group>

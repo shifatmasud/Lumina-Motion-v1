@@ -16,13 +16,25 @@ interface WindowProps {
   height?: number;
   onUndo?: () => void;
   onRedo?: () => void;
+  isSnappingEnabled?: boolean;
+  onToggleSnapping?: () => void;
 }
 
 // Context Menu Portal
 const ContextMenu: React.FC<{
   rect: DOMRect;
   onClose: () => void;
-}> = ({ rect, onClose }) => {
+  windowId: string;
+  isSnappingEnabled?: boolean;
+  onToggleSnapping?: () => void;
+}> = ({ rect, onClose, windowId, isSnappingEnabled, onToggleSnapping }) => {
+  const handleItemClick = (action?: () => void) => {
+    action?.();
+    onClose();
+  };
+  
+  const baseItems = ['Reset Position', 'Minimize', 'Snap to Grid', 'Help'];
+
   return createPortal(
     <>
       <div 
@@ -50,9 +62,32 @@ const ContextMenu: React.FC<{
           gap: '2px'
         }}
       >
-        {['Reset Position', 'Minimize', 'Snap to Grid', 'Help'].map(item => (
+        {windowId === 'timeline' && onToggleSnapping && (
+            <div 
+                onClick={() => handleItemClick(onToggleSnapping)}
+                style={{ 
+                    padding: '8px 12px', 
+                    ...DesignSystem.Type.Label.S, 
+                    color: DesignSystem.Color.Base.Content[2],
+                    cursor: 'pointer',
+                    borderRadius: DesignSystem.Effect.Radius.S,
+                    transition: '0.1s'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = DesignSystem.Color.Base.Surface[3];
+                  e.currentTarget.style.color = DesignSystem.Color.Base.Content[1];
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'transparent';
+                  e.currentTarget.style.color = DesignSystem.Color.Base.Content[2];
+                }}
+            >
+                {isSnappingEnabled ? 'Disable Snapping' : 'Enable Snapping'}
+            </div>
+        )}
+        {baseItems.map(item => (
             <div key={item} 
-                onClick={onClose}
+                onClick={() => handleItemClick()}
                 style={{ 
                     padding: '8px 12px', 
                     ...DesignSystem.Type.Label.S, 
@@ -88,7 +123,9 @@ export const Window: React.FC<WindowProps> = ({
   width = 360,
   height = 500,
   onUndo,
-  onRedo
+  onRedo,
+  isSnappingEnabled,
+  onToggleSnapping,
 }) => {
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const [showMenu, setShowMenu] = useState(false);
@@ -273,7 +310,13 @@ export const Window: React.FC<WindowProps> = ({
       {/* Portal Menu Render */}
       <AnimatePresence>
         {showMenu && menuRect && (
-            <ContextMenu rect={menuRect} onClose={() => setShowMenu(false)} />
+            <ContextMenu 
+              rect={menuRect} 
+              onClose={() => setShowMenu(false)}
+              windowId={id}
+              isSnappingEnabled={isSnappingEnabled}
+              onToggleSnapping={onToggleSnapping}
+            />
         )}
       </AnimatePresence>
     </AnimatePresence>

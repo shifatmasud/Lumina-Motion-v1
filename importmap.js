@@ -1,3 +1,4 @@
+
 {
   "imports": {
     "react": "https://esm.sh/react@18.2.0",
@@ -10,6 +11,7 @@
     "three/examples/jsm/postprocessing/ShaderPass": "https://esm.sh/three@0.180.0/examples/jsm/postprocessing/ShaderPass?deps=three@0.180.0",
     "three/examples/jsm/postprocessing/UnrealBloomPass": "https://esm.sh/three@0.180.0/examples/jsm/postprocessing/UnrealBloomPass?deps=three@0.180.0",
     "three/examples/jsm/shaders/VignetteShader": "https://esm.sh/three@0.180.0/examples/jsm/shaders/VignetteShader?deps=three@0.180.0",
+    "three/examples/jsm/environments/RoomEnvironment": "https://esm.sh/three@0.180.0/examples/jsm/environments/RoomEnvironment?deps=three@0.180.0",
     "framer-motion": "https://esm.sh/framer-motion@12.23.24?deps=react@18.2.0",
     "gsap": "https://esm.sh/gsap@3.13.0",
     "@phosphor-icons/react": "https://esm.sh/@phosphor-icons/react@2.1.0?deps=react@18.2.0",

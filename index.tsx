@@ -23,7 +23,8 @@ import {
   SpeakerHigh,
   Palette,
   Diamond,
-  Cylinder
+  Cylinder,
+  Eye
 } from '@phosphor-icons/react';
 import gsap from 'gsap';
 
@@ -59,6 +60,17 @@ const EASING_OPTIONS = [
   { label: 'Overshoot (Back Out)', value: 'back.out(1.7)' },
 ];
 
+const materialPresets: { [key: string]: Partial<SceneObject> } = {
+    'default': { metalness: 0.2, roughness: 0.1, transmission: 0, ior: 1.5, thickness: 0.5, clearcoat: 0, clearcoatRoughness: 0, opacity: 1 },
+    'clay': { metalness: 0, roughness: 1.0, transmission: 0, clearcoat: 0, ior: 1.4, opacity: 1 },
+    'glass': { metalness: 0, roughness: 0.02, transmission: 1.0, ior: 1.5, thickness: 1.2, clearcoat: 1.0, clearcoatRoughness: 0.05, opacity: 1 },
+    'frostedGlass': { metalness: 0, roughness: 0.45, transmission: 1.0, ior: 1.5, thickness: 1.2, clearcoat: 0.1, clearcoatRoughness: 0.1, opacity: 1 },
+    'metal': { metalness: 1.0, roughness: 0.1, transmission: 0, clearcoat: 0.5, clearcoatRoughness: 0.1, ior: 2.5, opacity: 1 },
+    'chrome': { metalness: 1.0, roughness: 0.0, transmission: 0, clearcoat: 1.0, clearcoatRoughness: 0.0, ior: 2.5, opacity: 1 },
+    'plastic': { metalness: 0.1, roughness: 0.5, transmission: 0, clearcoat: 0.5, clearcoatRoughness: 0.1, ior: 1.5, opacity: 1 },
+    'water': { metalness: 0.1, roughness: 0.1, transmission: 0.9, ior: 1.33, thickness: 1.0, clearcoat: 1.0, clearcoatRoughness: 0, opacity: 1 },
+};
+
 const PropSlider = ({ label, value, onChange, isMode, ...props }: any) => {
     return (
         <div style={{ position: 'relative', padding: isMode ? '4px' : '0', border: isMode ? `1px dashed ${DesignSystem.Color.Feedback.Warning}` : 'none', borderRadius: '8px', margin: isMode ? '-4px' : '0' }}>
@@ -78,9 +90,10 @@ const App = () => {
   const dockConstraintsRef = useRef(null);
   const animationFrameRef = useRef<number>();
   const lastTimeRef = useRef<number>();
+  const prevTimeRef = useRef(0);
 
   // --- State ---
-  const [accentColor, setAccentColor] = useState(ACCENT_COLORS[2]);
+  const [accentColor, setAccentColor] = useState(DesignSystem.Color.Accent.Surface[1] as string); // Using DesignSystem for default
   const [objects, setObjects] = useState<SceneObject[]>([
     {
       id: 'camera-main',
@@ -105,6 +118,7 @@ const App = () => {
       metalness: 0.2,
       roughness: 0.1,
       opacity: 1,
+      transmission: 0, ior: 1.5, thickness: 0.5, clearcoat: 0, clearcoatRoughness: 0,
       startTime: 0,
       duration: 5,
       animations: [],
@@ -121,7 +135,7 @@ const App = () => {
       backgroundColor: '#000000',
       bloom: { enabled: false, strength: 0.2, threshold: 0.85, radius: 0.5 },
       vignette: { enabled: false, offset: 1.0, darkness: 1.0 },
-      accentColor: ACCENT_COLORS[2],
+      accentColor: DesignSystem.Color.Accent.Surface[1] as string, // Using DesignSystem for default
       showGrid: true,
   });
   
@@ -129,6 +143,7 @@ const App = () => {
   const [totalDuration, setTotalDuration] = useState(10); // in seconds
   const [currentTime, setCurrentTime] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isSnappingEnabled, setIsSnappingEnabled] = useState(true);
 
   // Window Visibility States
   const [showAssets, setShowAssets] = useState(false);
@@ -159,7 +174,11 @@ const App = () => {
   }, [objects]);
   
   useEffect(() => {
-    if (engineRef.current) engineRef.current.setTime(currentTime, objects, isPlaying);
+    if (engineRef.current) {
+      const timeHasChanged = prevTimeRef.current !== currentTime;
+      engineRef.current.setTime(currentTime, objects, isPlaying, timeHasChanged);
+      prevTimeRef.current = currentTime;
+    }
   }, [currentTime, objects, isPlaying]);
 
   useEffect(() => {
@@ -199,7 +218,7 @@ const App = () => {
   };
     
   const handleAddObject = (type: SceneObject['type'], url?: string, width?: number, height?: number) => {
-    const defaultName = type === 'mesh' ? 'Cube' : type === 'camera' ? 'Camera' : type === 'audio' ? 'Audio' : type === 'video' ? 'Video' : 'Object';
+    const defaultName = type === 'mesh' ? 'Cube' : type === 'camera' ? 'Camera' : type === 'audio' ? 'Audio' : type === 'video' ? 'Video' : type === 'glb' ? 'Model' : 'Object';
     
     const newObj: SceneObject = {
       id: uuidv4(), type,
@@ -208,8 +227,7 @@ const App = () => {
       rotation: [0, 0, 0], scale: [1, 1, 1], url,
       width, height,
       color: type === 'mesh' ? accentColor : undefined,
-      metalness: type === 'mesh' ? 0.2 : undefined,
-      roughness: type === 'mesh' ? 0.1 : undefined,
+      ...materialPresets.default,
       opacity: 1.0,
       curvature: 0,
       volume: type === 'audio' || type === 'video' ? 1.0 : undefined,
@@ -240,7 +258,8 @@ const App = () => {
       if (o.id !== selectedId) return o;
       
       const newAnimations = o.animations ? [...o.animations] : [];
-      const time = Math.max(0, currentTime - o.startTime);
+      // Explicitly round to prevent floating point misalignment
+      const time = parseFloat((Math.max(0, currentTime - o.startTime)).toFixed(3)); 
 
       const newValues: TimelineKeyframe['values'] = {
         position: [...o.position] as [number, number, number],
@@ -251,6 +270,11 @@ const App = () => {
       if (o.type === 'mesh') {
         newValues.metalness = o.metalness;
         newValues.roughness = o.roughness;
+        newValues.transmission = o.transmission;
+        newValues.ior = o.ior;
+        newValues.thickness = o.thickness;
+        newValues.clearcoat = o.clearcoat;
+        newValues.clearcoatRoughness = o.clearcoatRoughness;
       }
       if (o.type === 'audio' || o.type === 'video') newValues.volume = o.volume;
       newValues.opacity = o.opacity;
@@ -292,6 +316,11 @@ const App = () => {
           setCurrentTime(obj.startTime + kf.time);
       }
     }
+  };
+  
+  const handlePresetChange = (presetKey: string) => {
+    if (!selectedId || !materialPresets[presetKey]) return;
+    handleUpdateObject(selectedId, materialPresets[presetKey]);
   };
 
   const handleExportVideo = () => {
@@ -340,7 +369,8 @@ const App = () => {
     const baseState: TimelineKeyframe['values'] = {
         position: objData.position, rotation: objData.rotation, scale: objData.scale,
         metalness: objData.metalness, roughness: objData.roughness, opacity: objData.opacity, volume: objData.volume,
-        curvature: objData.curvature,
+        curvature: objData.curvature, transmission: objData.transmission, ior: objData.ior, thickness: objData.thickness,
+        clearcoat: objData.clearcoat, clearcoatRoughness: objData.clearcoatRoughness,
     };
     const baseKeyframe: TimelineKeyframe = { time: 0, values: {}, easing: keyframes[0]?.easing || 'power2.out' };
 
@@ -601,8 +631,27 @@ const App = () => {
                   )}
                 </Group>
                 
+                {selectedObject.type !== 'camera' && selectedObject.type !== 'audio' && (
+                  <Group title="APPEARANCE" icon={<Eye weight="fill"/>}>
+                      <PropSlider 
+                        label="OPACITY" 
+                        value={getControlValue('opacity')}
+                        onChange={(v: number) => handleControlChange('opacity', v)}
+                        isMode={selectedKeyframe?.id === selectedId}
+                        min={0} max={1} step={0.01} 
+                      />
+                  </Group>
+                )}
+                
                 {selectedObject.type === 'mesh' && (
                     <Group title="MATERIAL" icon={<Palette />}>
+                       <Select label="PRESET" onChange={e => handlePresetChange(e.target.value)} value="">
+                          <option value="" disabled>Select a Preset...</option>
+                          {Object.entries(materialPresets).map(([key, value]) => (
+                            <option key={key} value={key}>{key.charAt(0).toUpperCase() + key.slice(1).replace(/([A-Z])/g, ' $1').trim()}</option>
+                          ))}
+                       </Select>
+
                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                            <label style={{ ...DesignSystem.Type.Label.S, color: DesignSystem.Color.Base.Content[2] }}>COLOR</label>
                            <div style={{ display: 'flex', gap: DesignSystem.Space(2), alignItems: 'center' }}>
@@ -631,6 +680,25 @@ const App = () => {
                         isMode={selectedKeyframe?.id === selectedId}
                         min={0} max={1} step={0.01} 
                       />
+                      <Divider />
+                      <PropSlider label="TRANSMISSION" value={getControlValue('transmission')} onChange={v => handleControlChange('transmission', v)} min={0} max={1} step={0.01} isMode={selectedKeyframe?.id === selectedId} />
+                      <AnimatePresence>
+                      {getControlValue('transmission') > 0 && (
+                        <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} style={{ overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: DesignSystem.Space(3) }}>
+                            <PropSlider label="IOR" value={getControlValue('ior')} onChange={v => handleControlChange('ior', v)} min={1} max={2.5} step={0.01} isMode={selectedKeyframe?.id === selectedId} />
+                            <PropSlider label="THICKNESS" value={getControlValue('thickness')} onChange={v => handleControlChange('thickness', v)} min={0} max={5} step={0.1} isMode={selectedKeyframe?.id === selectedId} />
+                        </motion.div>
+                      )}
+                      </AnimatePresence>
+                      <Divider />
+                      <PropSlider label="CLEARCOAT" value={getControlValue('clearcoat')} onChange={v => handleControlChange('clearcoat', v)} min={0} max={1} step={0.01} isMode={selectedKeyframe?.id === selectedId} />
+                      <AnimatePresence>
+                      {getControlValue('clearcoat') > 0 && (
+                          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} style={{ overflow: 'hidden' }}>
+                            <PropSlider label="ROUGHNESS" value={getControlValue('clearcoatRoughness')} onChange={v => handleControlChange('clearcoatRoughness', v)} min={0} max={1} step={0.01} isMode={selectedKeyframe?.id === selectedId} />
+                          </motion.div>
+                      )}
+                      </AnimatePresence>
                     </Group>
                 )}
 
@@ -790,7 +858,16 @@ const App = () => {
         )}
       </Window>
 
-      <Window id="timeline" title="SEQUENCER" isOpen={showTimeline} onClose={() => setShowTimeline(false)} width={800} height={280}>
+      <Window 
+        id="timeline" 
+        title="SEQUENCER" 
+        isOpen={showTimeline} 
+        onClose={() => setShowTimeline(false)} 
+        width={800} 
+        height={450}
+        isSnappingEnabled={isSnappingEnabled}
+        onToggleSnapping={() => setIsSnappingEnabled(!isSnappingEnabled)}
+      >
           <TimelineSequencer 
             objects={objects} 
             setObjects={setObjects} 
@@ -805,6 +882,7 @@ const App = () => {
             selectedKeyframe={selectedKeyframe}
             onSelectKeyframe={handleSelectKeyframe}
             onRemoveKeyframe={handleRemoveKeyframe}
+            isSnappingEnabled={isSnappingEnabled}
           />
       </Window>
 
