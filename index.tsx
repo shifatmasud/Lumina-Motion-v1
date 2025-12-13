@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import { v4 as uuidv4 } from 'uuid';
@@ -25,7 +24,8 @@ import {
   Palette,
   Diamond,
   Cylinder,
-  Eye
+  Eye,
+  Lightbulb
 } from '@phosphor-icons/react';
 import gsap from 'gsap';
 
@@ -112,7 +112,7 @@ const App = () => {
     { 
       id: '1', 
       type: 'mesh', 
-      position: [0, 0, 0], 
+      position: [0, 0.5, 0], 
       rotation: [0, 0, 0], 
       scale: [1, 1, 1], 
       color: '#ffffff',
@@ -136,8 +136,13 @@ const App = () => {
       backgroundColor: '#000000',
       bloom: { enabled: false, strength: 0.2, threshold: 0.85, radius: 0.5 },
       vignette: { enabled: false, offset: 1.0, darkness: 1.0 },
-      accentColor: DesignSystem.Color.Accent.Surface[1] as string, // Using DesignSystem for default
+      accentColor: DesignSystem.Color.Accent.Surface[1] as string,
       showGrid: true,
+      showGround: true,
+      groundColor: '#050505',
+      ambientLight: { color: '#ffffff', intensity: 0.4 },
+      mainLight: { color: '#ffffff', intensity: 1.2, position: [5, 10, 7] },
+      rimLight: { color: DesignSystem.Color.Accent.Surface[1] as string, intensity: 5.0, position: [-5, 0, -5] },
   });
   
   // Timeline State
@@ -157,7 +162,11 @@ const App = () => {
     document.documentElement.style.setProperty('--accent-surface', accentColor);
     document.documentElement.style.setProperty('--accent-surface-dim', adjustColor(accentColor, -40));
     document.documentElement.style.setProperty('--accent-glow', `${accentColor}66`); // 40% opacity
-    setGlobalSettings(prev => ({ ...prev, accentColor }));
+    setGlobalSettings(prev => ({ 
+      ...prev, 
+      accentColor,
+      rimLight: { ...prev.rimLight, color: accentColor } 
+    }));
   }, [accentColor]);
 
   // Engine Init & Sync
@@ -183,7 +192,7 @@ const App = () => {
   }, [currentTime, objects, isPlaying]);
 
   useEffect(() => {
-    if (engineRef.current) engineRef.current.updatePostProcessing(globalSettings);
+    if (engineRef.current) engineRef.current.updateGlobalSettings(globalSettings);
   }, [globalSettings]);
 
   // Playback Loop
@@ -478,6 +487,20 @@ const App = () => {
     const kf = selectedObject.animations[selectedKeyframe.index];
     return kf?.easing || 'power2.out';
   }
+
+  const handleLightSettingChange = (light: 'ambientLight' | 'mainLight' | 'rimLight', property: string, value: any, axis?: number) => {
+    setGlobalSettings(g => {
+        const newLightSettings = { ...g[light] } as any;
+        if (axis !== undefined) {
+            const newPosition = [...newLightSettings[property]] as [number,number,number];
+            newPosition[axis] = value;
+            newLightSettings[property] = newPosition;
+        } else {
+            newLightSettings[property] = value;
+        }
+        return { ...g, [light]: newLightSettings };
+    });
+  };
 
   return (
     <div ref={dockConstraintsRef} style={{ width: '100%', height: '100%', position: 'relative', overflow: 'hidden', background: DesignSystem.Color.Base.Surface[1] }}>
@@ -785,7 +808,7 @@ const App = () => {
             <div style={{ display: 'flex', flexDirection: 'column', gap: DesignSystem.Space(4) }}>
                 <Group title="SCENE" icon={<PaintBrush weight="fill"/>}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                        <label style={{ ...DesignSystem.Type.Label.S, color: DesignSystem.Color.Base.Content[2] }}>BACKGROUND</label>
+                        <label style={{ ...DesignSystem.Type.Label.S, color: DesignSystem.Color.Base.Content[2] }}>BACKGROUND COLOR</label>
                         <div style={{ display: 'flex', gap: DesignSystem.Space(2), alignItems: 'center' }}>
                             <div style={{ width: '32px', height: '32px', borderRadius: '8px', overflow: 'hidden', border: `1px solid ${DesignSystem.Color.Base.Border[2]}`, flexShrink: 0 }}>
                                 <input 
@@ -798,8 +821,24 @@ const App = () => {
                             <Input type="text" value={globalSettings.backgroundColor} onChange={(e) => setGlobalSettings(g => ({ ...g, backgroundColor: e.target.value }))} style={{ flex: 1 }} />
                         </div>
                     </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                        <label style={{ ...DesignSystem.Type.Label.S, color: DesignSystem.Color.Base.Content[2] }}>GROUND COLOR</label>
+                        <div style={{ display: 'flex', gap: DesignSystem.Space(2), alignItems: 'center' }}>
+                            <div style={{ width: '32px', height: '32px', borderRadius: '8px', overflow: 'hidden', border: `1px solid ${DesignSystem.Color.Base.Border[2]}`, flexShrink: 0 }}>
+                                <input 
+                                    type="color" 
+                                    value={globalSettings.groundColor} 
+                                    onChange={(e) => setGlobalSettings(g => ({ ...g, groundColor: e.target.value }))}
+                                    style={{ width: '150%', height: '150%', margin: '-25%', padding: 0, border: 'none', cursor: 'pointer' }} 
+                                />
+                            </div>
+                            <Input type="text" value={globalSettings.groundColor} onChange={(e) => setGlobalSettings(g => ({ ...g, groundColor: e.target.value }))} style={{ flex: 1 }} />
+                        </div>
+                    </div>
                     
                     <Toggle label="SHOW GRID" value={globalSettings.showGrid} onChange={(v) => setGlobalSettings(g => ({ ...g, showGrid: v }))} />
+                    <Toggle label="SHOW GROUND" value={globalSettings.showGround} onChange={(v) => setGlobalSettings(g => ({ ...g, showGround: v }))} />
 
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                         <span style={DesignSystem.Type.Label.S}>ACCENT COLOR</span>
@@ -830,6 +869,42 @@ const App = () => {
                                     <CaretDown size={14} color={DesignSystem.Color.Base.Content[3]} />
                                 </div>
                              </div>
+                        </div>
+                    </div>
+                </Group>
+                <Group title="LIGHTING" icon={<Lightbulb weight="fill"/>}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: DesignSystem.Space(3)}}>
+                        {/* Ambient Light */}
+                        <div>
+                            <span style={{ ...DesignSystem.Type.Label.S, color: DesignSystem.Color.Base.Content[2], display: 'block', marginBottom: DesignSystem.Space(2) }}>AMBIENT LIGHT</span>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: DesignSystem.Space(2)}}>
+                                <Input label="COLOR" type="color" value={globalSettings.ambientLight.color} onChange={e => handleLightSettingChange('ambientLight', 'color', e.target.value)} />
+                                <Slider label="INTENSITY" value={globalSettings.ambientLight.intensity} min={0} max={2} step={0.01} onChange={v => handleLightSettingChange('ambientLight', 'intensity', v)} />
+                            </div>
+                        </div>
+                        <Divider />
+                        {/* Main Light */}
+                        <div>
+                            <span style={{ ...DesignSystem.Type.Label.S, color: DesignSystem.Color.Base.Content[2], display: 'block', marginBottom: DesignSystem.Space(2) }}>MAIN (DIRECTIONAL)</span>
+                             <div style={{ display: 'flex', flexDirection: 'column', gap: DesignSystem.Space(2)}}>
+                                <Input label="COLOR" type="color" value={globalSettings.mainLight.color} onChange={e => handleLightSettingChange('mainLight', 'color', e.target.value)} />
+                                <Slider label="INTENSITY" value={globalSettings.mainLight.intensity} min={0} max={5} step={0.1} onChange={v => handleLightSettingChange('mainLight', 'intensity', v)} />
+                                <Slider label="POS X" value={globalSettings.mainLight.position[0]} min={-20} max={20} step={0.5} onChange={v => handleLightSettingChange('mainLight', 'position', v, 0)} />
+                                <Slider label="POS Y" value={globalSettings.mainLight.position[1]} min={-20} max={20} step={0.5} onChange={v => handleLightSettingChange('mainLight', 'position', v, 1)} />
+                                <Slider label="POS Z" value={globalSettings.mainLight.position[2]} min={-20} max={20} step={0.5} onChange={v => handleLightSettingChange('mainLight', 'position', v, 2)} />
+                            </div>
+                        </div>
+                        <Divider />
+                        {/* Rim Light */}
+                         <div>
+                            <span style={{ ...DesignSystem.Type.Label.S, color: DesignSystem.Color.Base.Content[2], display: 'block', marginBottom: DesignSystem.Space(2) }}>RIM (SPOTLIGHT)</span>
+                             <div style={{ display: 'flex', flexDirection: 'column', gap: DesignSystem.Space(2)}}>
+                                <Input label="COLOR" type="color" value={globalSettings.rimLight.color} onChange={e => handleLightSettingChange('rimLight', 'color', e.target.value)} />
+                                <Slider label="INTENSITY" value={globalSettings.rimLight.intensity} min={0} max={20} step={0.5} onChange={v => handleLightSettingChange('rimLight', 'intensity', v)} />
+                                <Slider label="POS X" value={globalSettings.rimLight.position[0]} min={-20} max={20} step={0.5} onChange={v => handleLightSettingChange('rimLight', 'position', v, 0)} />
+                                <Slider label="POS Y" value={globalSettings.rimLight.position[1]} min={-20} max={20} step={0.5} onChange={v => handleLightSettingChange('rimLight', 'position', v, 1)} />
+                                <Slider label="POS Z" value={globalSettings.rimLight.position[2]} min={-20} max={20} step={0.5} onChange={v => handleLightSettingChange('rimLight', 'position', v, 2)} />
+                            </div>
                         </div>
                     </div>
                 </Group>

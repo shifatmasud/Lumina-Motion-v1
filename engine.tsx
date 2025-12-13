@@ -69,6 +69,11 @@ export interface GlobalSettings {
   vignette: { enabled: boolean; offset: number; darkness: number; };
   accentColor: string;
   showGrid: boolean;
+  showGround: boolean;
+  groundColor: string;
+  ambientLight: { color: string; intensity: number; };
+  mainLight: { color: string; intensity: number; position: [number, number, number]; };
+  rimLight: { color: string; intensity: number; position: [number, number, number]; };
 }
 
 const chromaKeyVertexShader = `
@@ -127,8 +132,11 @@ export class Engine {
   audioListener: THREE.AudioListener;
   gltfLoader: GLTFLoader;
   audioLoader: THREE.AudioLoader;
+  ambientLight: THREE.AmbientLight;
+  mainLight: THREE.DirectionalLight;
   rimLight: THREE.SpotLight;
   gridHelper: THREE.GridHelper;
+  ground: THREE.Mesh;
   isUserControllingCamera: boolean = false;
   pmremGenerator: THREE.PMREMGenerator;
   
@@ -153,6 +161,15 @@ export class Engine {
     this.gridHelper = new THREE.GridHelper(30, 30, 0x222222, 0x111111);
     this.scene.add(this.gridHelper);
 
+    // Ground plane for shadows
+    const groundGeo = new THREE.PlaneGeometry(30, 30);
+    const groundMat = new THREE.MeshStandardMaterial({ color: 0x050505, roughness: 0.8, metalness: 0 });
+    this.ground = new THREE.Mesh(groundGeo, groundMat);
+    this.ground.rotation.x = -Math.PI / 2;
+    this.ground.position.y = 0;
+    this.ground.receiveShadow = true;
+    this.scene.add(this.ground);
+
     // Camera
     this.camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
     this.camera.position.set(0, 0, 6);
@@ -167,6 +184,9 @@ export class Engine {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.0;
+    this.renderer.outputColorSpace = THREE.SRGBColorSpace; // CRITICAL for PBR
+    this.renderer.shadowMap.enabled = true; // Enable shadows
+    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.domElement.style.touchAction = 'none';
     container.appendChild(this.renderer.domElement);
 
@@ -175,7 +195,6 @@ export class Engine {
     this.pmremGenerator.compileEquirectangularShader();
     const environment = new RoomEnvironment();
     this.scene.environment = this.pmremGenerator.fromScene(environment).texture;
-    // this.scene.background = new THREE.Color('#111'); // optional visual background
     environment.dispose();
 
     // Post-processing
@@ -194,16 +213,26 @@ export class Engine {
     this.composer.addPass(this.vignettePass);
 
     // Lights
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
-    this.scene.add(ambientLight);
+    this.ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+    this.scene.add(this.ambientLight);
     
-    const mainLight = new THREE.DirectionalLight(0xffffff, 1.2);
-    mainLight.position.set(5, 10, 7);
-    this.scene.add(mainLight);
+    this.mainLight = new THREE.DirectionalLight(0xffffff, 1.2);
+    this.mainLight.position.set(5, 10, 7);
+    this.mainLight.castShadow = true;
+    this.mainLight.shadow.mapSize.width = 2048;
+    this.mainLight.shadow.mapSize.height = 2048;
+    this.mainLight.shadow.camera.top = 10;
+    this.mainLight.shadow.camera.bottom = -10;
+    this.mainLight.shadow.camera.left = -10;
+    this.mainLight.shadow.camera.right = 10;
+    this.mainLight.shadow.camera.near = 0.5;
+    this.mainLight.shadow.camera.far = 50;
+    this.scene.add(this.mainLight);
     
     this.rimLight = new THREE.SpotLight(0x5B50FF, 5);
     this.rimLight.position.set(-5, 0, -5);
     this.rimLight.lookAt(0,0,0);
+    this.rimLight.castShadow = true;
     this.scene.add(this.rimLight);
 
     // Controls
@@ -268,7 +297,6 @@ export class Engine {
     
     if (objData.type === 'mesh') {
       const geometry = new THREE.BoxGeometry(1, 1, 1);
-      // High Quality MeshPhysicalMaterial
       const material = new THREE.MeshPhysicalMaterial({ 
         color: objData.color || '#ffffff',
         metalness: objData.metalness ?? 0.2,
@@ -278,14 +306,13 @@ export class Engine {
         thickness: objData.thickness ?? 0.5,
         clearcoat: objData.clearcoat ?? 0,
         clearcoatRoughness: objData.clearcoatRoughness ?? 0,
-        // Opacity vs Transmission logic:
-        // If transmission > 0, transparent usually must be false for index-of-refraction effects to look correct in Three.js,
-        // unless we want alpha fading. We will prioritize alpha fading if opacity < 1.
         transparent: (objData.opacity ?? 1.0) < 1.0,
         opacity: objData.opacity ?? 1.0,
         envMapIntensity: 1.0, 
       });
       mesh = new THREE.Mesh(geometry, material);
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
     } else if (objData.type === 'plane' || objData.type === 'video') {
        let planeWidth = 1.6;
        let planeHeight = 0.9;
@@ -358,7 +385,6 @@ export class Engine {
                 const center = box.getCenter(new THREE.Vector3());
                 gltf.scene.position.sub(center);
 
-                // Initial material setup for GLB to ensure transparency works if opacity < 1
                 gltf.scene.traverse((child) => {
                     if (child instanceof THREE.Mesh) {
                          child.castShadow = true;
@@ -366,7 +392,6 @@ export class Engine {
                          if (child.material) {
                              const materials = Array.isArray(child.material) ? child.material : [child.material];
                              materials.forEach(m => {
-                                 // Default to standard material properties if not physical
                                  m.envMapIntensity = 1.0;
                                  if (objData.opacity !== undefined && objData.opacity < 1.0) {
                                      m.transparent = true;
@@ -517,9 +542,11 @@ export class Engine {
 
       // Apply Materials
       const updateMaterial = (mat: THREE.Material) => {
-           if (mat instanceof THREE.MeshPhysicalMaterial) {
+           if (mat instanceof THREE.MeshPhysicalMaterial || mat instanceof THREE.MeshStandardMaterial) {
                 mat.metalness = finalMetalness;
                 mat.roughness = finalRoughness;
+           }
+           if (mat instanceof THREE.MeshPhysicalMaterial) {
                 mat.transmission = finalTransmission;
                 mat.ior = finalIor;
                 mat.thickness = finalThickness;
@@ -565,7 +592,6 @@ export class Engine {
             const invEased = 1 - eased;
             
             if (intro.fade) {
-                // Approximate fading by multiplying existing opacity
                 const fadeOpacity = finalOpacity * eased;
                 if (obj3d instanceof THREE.Mesh && !Array.isArray(obj3d.material)) {
                      obj3d.material.opacity = fadeOpacity;
@@ -638,7 +664,7 @@ export class Engine {
 
         unseen.delete(objData.id);
 
-        if (obj3d instanceof THREE.Mesh && obj3d.material instanceof THREE.MeshPhysicalMaterial) {
+        if (obj3d instanceof THREE.Mesh && (obj3d.material instanceof THREE.MeshPhysicalMaterial || obj3d.material instanceof THREE.MeshStandardMaterial)) {
             obj3d.material.color.set(objData.color || '#ffffff');
         }
 
@@ -679,8 +705,9 @@ export class Engine {
     });
   }
 
-  updatePostProcessing(settings: GlobalSettings) {
+  updateGlobalSettings(settings: GlobalSettings) {
       this.scene.background = new THREE.Color(settings.backgroundColor);
+      
       this.bloomPass.enabled = settings.bloom.enabled;
       this.bloomPass.strength = settings.bloom.strength;
       this.bloomPass.threshold = settings.bloom.threshold;
@@ -690,8 +717,23 @@ export class Engine {
       this.vignettePass.uniforms['offset'].value = settings.vignette.offset;
       this.vignettePass.uniforms['darkness'].value = settings.vignette.darkness;
       
-      this.rimLight.color.set(settings.accentColor);
+      this.ambientLight.color.set(settings.ambientLight.color);
+      this.ambientLight.intensity = settings.ambientLight.intensity;
+
+      this.mainLight.color.set(settings.mainLight.color);
+      this.mainLight.intensity = settings.mainLight.intensity;
+      this.mainLight.position.fromArray(settings.mainLight.position);
+
+      this.rimLight.color.set(settings.rimLight.color);
+      this.rimLight.intensity = settings.rimLight.intensity;
+      this.rimLight.position.fromArray(settings.rimLight.position);
+      this.rimLight.lookAt(0,0,0);
+
       this.gridHelper.visible = settings.showGrid;
+      this.ground.visible = settings.showGround;
+      if (this.ground.material instanceof THREE.MeshStandardMaterial) {
+        this.ground.material.color.set(settings.groundColor);
+      }
   }
 
   animate() {
