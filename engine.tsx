@@ -546,7 +546,7 @@ export class Engine {
     return mesh;
   }
 
-  setTime(time: number, objects: SceneObject[], isPlaying: boolean, timeHasChanged: boolean) {
+  setTime(time: number, objects: SceneObject[], isPlaying: boolean, timeHasChanged: boolean, easingMode: 'arrival' | 'departure') {
     if (!this.scene) return;
     
     objects.forEach(objData => {
@@ -624,41 +624,43 @@ export class Engine {
         };
         const baseKeyframe: TimelineKeyframe = { time: 0, values: {}, easing: 'power2.out' };
         
-        let kf1: TimelineKeyframe = baseKeyframe;
-        let kf2: TimelineKeyframe | null = null;
+        let departureKf: TimelineKeyframe = baseKeyframe;
+        let arrivalKf: TimelineKeyframe | null = null;
         for (const kf of keyframes) {
-            if (kf.time <= localTime) kf1 = kf;
-            else { kf2 = kf; break; }
+            if (kf.time <= localTime) departureKf = kf;
+            else { arrivalKf = kf; break; }
         }
-        if (!kf2) kf2 = kf1;
+        if (!arrivalKf) arrivalKf = departureKf;
 
-        const duration = kf2.time - kf1.time;
-        const progress = duration > 0 ? (localTime - kf1.time) / duration : 1;
-        const ease = gsap.parseEase(kf2.easing || 'power2.out');
+        const duration = arrivalKf.time - departureKf.time;
+        const progress = duration > 0 ? (localTime - departureKf.time) / duration : 1;
+        
+        const easingSource = easingMode === 'arrival' ? arrivalKf : departureKf;
+        const ease = gsap.parseEase(easingSource.easing || 'power2.out');
         const easedProgress = ease(progress);
 
-        const kf1Values = { ...baseState, ...kf1.values };
-        const kf2Values = { ...baseState, ...kf2.values };
+        const departureValues = { ...baseState, ...departureKf.values };
+        const arrivalValues = { ...baseState, ...arrivalKf.values };
         
         // Helper to interpolate scalars
         const lerp = (a: any, b: any) => gsap.utils.interpolate(a, b, easedProgress);
 
-        if (kf1Values.position && kf2Values.position) obj3d.position.fromArray(lerp(kf1Values.position, kf2Values.position));
-        if (kf1Values.rotation && kf2Values.rotation) obj3d.rotation.fromArray(lerp(kf1Values.rotation, kf2Values.rotation).map((v: number) => THREE.MathUtils.degToRad(v)));
-        if (kf1Values.scale && kf2Values.scale) obj3d.scale.fromArray(lerp(kf1Values.scale, kf2Values.scale));
+        if (departureValues.position && arrivalValues.position) obj3d.position.fromArray(lerp(departureValues.position, arrivalValues.position));
+        if (departureValues.rotation && arrivalValues.rotation) obj3d.rotation.fromArray(lerp(departureValues.rotation, arrivalValues.rotation).map((v: number) => THREE.MathUtils.degToRad(v)));
+        if (departureValues.scale && arrivalValues.scale) obj3d.scale.fromArray(lerp(departureValues.scale, arrivalValues.scale));
 
-        if (kf1Values.metalness !== undefined && kf2Values.metalness !== undefined) finalMetalness = lerp(kf1Values.metalness, kf2Values.metalness);
-        if (kf1Values.roughness !== undefined && kf2Values.roughness !== undefined) finalRoughness = lerp(kf1Values.roughness, kf2Values.roughness);
-        if (kf1Values.transmission !== undefined && kf2Values.transmission !== undefined) finalTransmission = lerp(kf1Values.transmission, kf2Values.transmission);
-        if (kf1Values.ior !== undefined && kf2Values.ior !== undefined) finalIor = lerp(kf1Values.ior, kf2Values.ior);
-        if (kf1Values.thickness !== undefined && kf2Values.thickness !== undefined) finalThickness = lerp(kf1Values.thickness, kf2Values.thickness);
-        if (kf1Values.clearcoat !== undefined && kf2Values.clearcoat !== undefined) finalClearcoat = lerp(kf1Values.clearcoat, kf2Values.clearcoat);
-        if (kf1Values.clearcoatRoughness !== undefined && kf2Values.clearcoatRoughness !== undefined) finalClearcoatRoughness = lerp(kf1Values.clearcoatRoughness, kf2Values.clearcoatRoughness);
-        if (kf1Values.opacity !== undefined && kf2Values.opacity !== undefined) finalOpacity = lerp(kf1Values.opacity, kf2Values.opacity);
-        if (kf1Values.curvature !== undefined && kf2Values.curvature !== undefined) finalCurvature = lerp(kf1Values.curvature, kf2Values.curvature);
-        if (kf1Values.volume !== undefined && kf2Values.volume !== undefined) finalVolume = lerp(kf1Values.volume, kf2Values.volume);
-        if (kf1Values.extrusion !== undefined && kf2Values.extrusion !== undefined) finalExtrusion = lerp(kf1Values.extrusion, kf2Values.extrusion);
-        if (kf1Values.pathLength !== undefined && kf2Values.pathLength !== undefined) finalPathLength = lerp(kf1Values.pathLength, kf2Values.pathLength);
+        if (departureValues.metalness !== undefined && arrivalValues.metalness !== undefined) finalMetalness = lerp(departureValues.metalness, arrivalValues.metalness);
+        if (departureValues.roughness !== undefined && arrivalValues.roughness !== undefined) finalRoughness = lerp(departureValues.roughness, arrivalValues.roughness);
+        if (departureValues.transmission !== undefined && arrivalValues.transmission !== undefined) finalTransmission = lerp(departureValues.transmission, arrivalValues.transmission);
+        if (departureValues.ior !== undefined && arrivalValues.ior !== undefined) finalIor = lerp(departureValues.ior, arrivalValues.ior);
+        if (departureValues.thickness !== undefined && arrivalValues.thickness !== undefined) finalThickness = lerp(departureValues.thickness, arrivalValues.thickness);
+        if (departureValues.clearcoat !== undefined && arrivalValues.clearcoat !== undefined) finalClearcoat = lerp(departureValues.clearcoat, arrivalValues.clearcoat);
+        if (departureValues.clearcoatRoughness !== undefined && arrivalValues.clearcoatRoughness !== undefined) finalClearcoatRoughness = lerp(departureValues.clearcoatRoughness, arrivalValues.clearcoatRoughness);
+        if (departureValues.opacity !== undefined && arrivalValues.opacity !== undefined) finalOpacity = lerp(departureValues.opacity, arrivalValues.opacity);
+        if (departureValues.curvature !== undefined && arrivalValues.curvature !== undefined) finalCurvature = lerp(departureValues.curvature, arrivalValues.curvature);
+        if (departureValues.volume !== undefined && arrivalValues.volume !== undefined) finalVolume = lerp(departureValues.volume, arrivalValues.volume);
+        if (departureValues.extrusion !== undefined && arrivalValues.extrusion !== undefined) finalExtrusion = lerp(departureValues.extrusion, arrivalValues.extrusion);
+        if (departureValues.pathLength !== undefined && arrivalValues.pathLength !== undefined) finalPathLength = lerp(departureValues.pathLength, arrivalValues.pathLength);
       }
 
       // Geometry Update for SVG (if needed)

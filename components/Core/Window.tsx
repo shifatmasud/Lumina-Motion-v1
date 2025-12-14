@@ -1,11 +1,13 @@
 
 
+
 import React, { useRef, useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence, useDragControls } from 'framer-motion';
-import { DotsThree, ArrowCounterClockwise, ArrowClockwise, CornersOut, Minus, X, Gear } from '@phosphor-icons/react';
+import { DotsThree, ArrowCounterClockwise, ArrowClockwise, CornersOut, Minus, X, Gear, ToggleRight, MagicWand, Copy, ClipboardText } from '@phosphor-icons/react';
 import { DesignSystem } from '../../theme';
 import { Button } from './Primitives';
+import { TimelineKeyframe } from '../../engine';
 
 interface WindowProps {
   id: string;
@@ -21,6 +23,12 @@ interface WindowProps {
   onToggleSnapping?: () => void;
   onResetScene?: () => void;
   onOpenProjectSettings?: () => void;
+  easingMode?: 'arrival' | 'departure';
+  onToggleEasingMode?: () => void;
+  selectedKeyframe?: { id: string, index: number } | null;
+  copiedKeyframeYaml?: string | null;
+  onCopyKeyframeAsYaml?: () => void;
+  onPasteKeyframeFromYaml?: () => void;
 }
 
 // Context Menu Portal
@@ -32,13 +40,48 @@ const ContextMenu: React.FC<{
   onToggleSnapping?: () => void;
   onResetScene?: () => void;
   onOpenProjectSettings?: () => void;
-}> = ({ rect, onClose, windowId, isSnappingEnabled, onToggleSnapping, onResetScene, onOpenProjectSettings }) => {
+  easingMode?: 'arrival' | 'departure';
+  onToggleEasingMode?: () => void;
+  selectedKeyframe?: { id: string, index: number } | null;
+  copiedKeyframeYaml?: string | null;
+  onCopyKeyframeAsYaml?: () => void;
+  onPasteKeyframeFromYaml?: () => void;
+}> = ({ 
+    rect, onClose, windowId, isSnappingEnabled, onToggleSnapping, onResetScene, onOpenProjectSettings, easingMode, onToggleEasingMode,
+    selectedKeyframe, copiedKeyframeYaml, onCopyKeyframeAsYaml, onPasteKeyframeFromYaml
+}) => {
   const handleItemClick = (action?: () => void) => {
     action?.();
     onClose();
   };
   
-  const baseItems = ['Reset Position', 'Minimize', 'Snap to Grid', 'Help'];
+  const baseItems = ['Reset Position', 'Minimize', 'Help'];
+
+  const menuItemStyle: React.CSSProperties = { 
+      padding: '8px 12px', 
+      ...DesignSystem.Type.Label.S, 
+      color: DesignSystem.Color.Base.Content[2],
+      cursor: 'pointer',
+      borderRadius: DesignSystem.Effect.Radius.S,
+      transition: '0.1s',
+      display: 'flex',
+      alignItems: 'center',
+      gap: DesignSystem.Space(2)
+  };
+
+  const menuItemHover = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.currentTarget.style.cursor !== 'not-allowed') {
+        e.currentTarget.style.background = DesignSystem.Color.Base.Surface[3];
+        e.currentTarget.style.color = DesignSystem.Color.Base.Content[1];
+    }
+  };
+
+  const menuItemLeave = (e: React.MouseEvent<HTMLDivElement>) => {
+    e.currentTarget.style.background = 'transparent';
+    e.currentTarget.style.color = DesignSystem.Color.Base.Content[2];
+  };
+
+  const canPaste = !!(selectedKeyframe && copiedKeyframeYaml);
 
   return createPortal(
     <>
@@ -55,7 +98,7 @@ const ContextMenu: React.FC<{
           position: 'fixed',
           top: rect.bottom + 8,
           left: rect.left,
-          width: '160px',
+          width: '180px',
           background: DesignSystem.Color.Base.Surface[2],
           border: `1px solid ${DesignSystem.Color.Base.Border[2]}`,
           borderRadius: DesignSystem.Effect.Radius.M,
@@ -71,100 +114,66 @@ const ContextMenu: React.FC<{
             <>
             <div 
                 onClick={() => handleItemClick(onOpenProjectSettings)}
-                style={{ 
-                    padding: '8px 12px', 
-                    ...DesignSystem.Type.Label.S, 
-                    color: DesignSystem.Color.Base.Content[2],
-                    cursor: 'pointer',
-                    borderRadius: DesignSystem.Effect.Radius.S,
-                    transition: '0.1s',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: DesignSystem.Space(2)
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = DesignSystem.Color.Base.Surface[3];
-                  e.currentTarget.style.color = DesignSystem.Color.Base.Content[1];
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'transparent';
-                  e.currentTarget.style.color = DesignSystem.Color.Base.Content[2];
-                }}
+                style={menuItemStyle}
+                onMouseEnter={menuItemHover} onMouseLeave={menuItemLeave}
             >
                 <Gear size={14} /> Project Settings
             </div>
             <div style={{height: '1px', background: DesignSystem.Color.Base.Border[1], margin: '4px 6px'}} />
             </>
         )}
+        {windowId === 'props' && (
+            <>
+                <div 
+                    onClick={() => { if (selectedKeyframe) handleItemClick(onCopyKeyframeAsYaml); }}
+                    style={{...menuItemStyle, opacity: selectedKeyframe ? 1 : 0.5, cursor: selectedKeyframe ? 'pointer' : 'not-allowed'}}
+                    onMouseEnter={menuItemHover} onMouseLeave={menuItemLeave}
+                >
+                    <Copy size={14} /> Copy as YAML
+                </div>
+                 <div 
+                    onClick={() => { if (selectedKeyframe) handleItemClick(onPasteKeyframeFromYaml); }}
+                    style={{...menuItemStyle, opacity: selectedKeyframe ? 1 : 0.5, cursor: selectedKeyframe ? 'pointer' : 'not-allowed'}}
+                    onMouseEnter={menuItemHover} onMouseLeave={menuItemLeave}
+                >
+                    <ClipboardText size={14} /> Paste from YAML
+                </div>
+                {onResetScene && <div style={{height: '1px', background: DesignSystem.Color.Base.Border[1], margin: '4px 6px'}} />}
+            </>
+        )}
         {windowId === 'props' && onResetScene && (
             <>
             <div 
                 onClick={() => handleItemClick(onResetScene)}
-                style={{ 
-                    padding: '8px 12px', 
-                    ...DesignSystem.Type.Label.S, 
-                    color: DesignSystem.Color.Feedback.Error,
-                    cursor: 'pointer',
-                    borderRadius: DesignSystem.Effect.Radius.S,
-                    transition: '0.1s',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: DesignSystem.Space(2)
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = 'rgba(255, 68, 68, 0.1)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'transparent';
-                }}
+                style={{ ...menuItemStyle, color: DesignSystem.Color.Feedback.Error }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255, 68, 68, 0.1)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
             >
                 <ArrowCounterClockwise size={14} /> Reset Scene
             </div>
             <div style={{height: '1px', background: DesignSystem.Color.Base.Border[1], margin: '4px 6px'}} />
             </>
         )}
-        {windowId === 'timeline' && onToggleSnapping && (
-            <div 
-                onClick={() => handleItemClick(onToggleSnapping)}
-                style={{ 
-                    padding: '8px 12px', 
-                    ...DesignSystem.Type.Label.S, 
-                    color: DesignSystem.Color.Base.Content[2],
-                    cursor: 'pointer',
-                    borderRadius: DesignSystem.Effect.Radius.S,
-                    transition: '0.1s'
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = DesignSystem.Color.Base.Surface[3];
-                  e.currentTarget.style.color = DesignSystem.Color.Base.Content[1];
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'transparent';
-                  e.currentTarget.style.color = DesignSystem.Color.Base.Content[2];
-                }}
-            >
-                {isSnappingEnabled ? 'Disable Snapping' : 'Enable Snapping'}
-            </div>
+        {windowId === 'timeline' && (
+            <>
+                {onToggleSnapping && (
+                    <div onClick={() => handleItemClick(onToggleSnapping)} style={menuItemStyle} onMouseEnter={menuItemHover} onMouseLeave={menuItemLeave}>
+                        <ToggleRight size={14} /> {isSnappingEnabled ? 'Disable Snapping' : 'Enable Snapping'}
+                    </div>
+                )}
+                {onToggleEasingMode && (
+                    <div onClick={() => handleItemClick(onToggleEasingMode)} style={menuItemStyle} onMouseEnter={menuItemHover} onMouseLeave={menuItemLeave}>
+                       <MagicWand size={14} /> Easing: {easingMode === 'arrival' ? 'On Arrival' : 'On Departure'}
+                    </div>
+                )}
+                <div style={{height: '1px', background: DesignSystem.Color.Base.Border[1], margin: '4px 6px'}} />
+            </>
         )}
         {baseItems.map(item => (
             <div key={item} 
                 onClick={() => handleItemClick()}
-                style={{ 
-                    padding: '8px 12px', 
-                    ...DesignSystem.Type.Label.S, 
-                    color: DesignSystem.Color.Base.Content[2],
-                    cursor: 'pointer',
-                    borderRadius: DesignSystem.Effect.Radius.S,
-                    transition: '0.1s'
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = DesignSystem.Color.Base.Surface[3];
-                  e.currentTarget.style.color = DesignSystem.Color.Base.Content[1];
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'transparent';
-                  e.currentTarget.style.color = DesignSystem.Color.Base.Content[2];
-                }}
+                style={menuItemStyle}
+                onMouseEnter={menuItemHover} onMouseLeave={menuItemLeave}
             >
                 {item}
             </div>
@@ -189,6 +198,12 @@ export const Window: React.FC<WindowProps> = ({
   onToggleSnapping,
   onResetScene,
   onOpenProjectSettings,
+  easingMode,
+  onToggleEasingMode,
+  selectedKeyframe,
+  copiedKeyframeYaml,
+  onCopyKeyframeAsYaml,
+  onPasteKeyframeFromYaml,
 }) => {
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const [showMenu, setShowMenu] = useState(false);
@@ -381,6 +396,12 @@ export const Window: React.FC<WindowProps> = ({
               onToggleSnapping={onToggleSnapping}
               onResetScene={onResetScene}
               onOpenProjectSettings={onOpenProjectSettings}
+              easingMode={easingMode}
+              onToggleEasingMode={onToggleEasingMode}
+              selectedKeyframe={selectedKeyframe}
+              copiedKeyframeYaml={copiedKeyframeYaml}
+              onCopyKeyframeAsYaml={onCopyKeyframeAsYaml}
+              onPasteKeyframeFromYaml={onPasteKeyframeFromYaml}
             />
         )}
       </AnimatePresence>

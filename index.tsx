@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import { v4 as uuidv4 } from 'uuid';
 import gsap from 'gsap';
+import yaml from 'js-yaml';
 
 import { DesignSystem } from './theme';
 import { Engine, SceneObject, GlobalSettings, TimelineKeyframe } from './engine';
@@ -30,8 +31,10 @@ const App = () => {
   const [objects, setObjects] = useState<SceneObject[]>(JSON.parse(JSON.stringify(INITIAL_OBJECTS)));
   const [selectedId, setSelectedId] = useState<string | null>('1');
   
-  // Selected Keyframe State: { objectId, keyframeIndex }
+  // Keyframe State
   const [selectedKeyframe, setSelectedKeyframe] = useState<{ id: string, index: number } | null>(null);
+  const [copiedKeyframeYaml, setCopiedKeyframeYaml] = useState<string | null>(null);
+
 
   const [globalSettings, setGlobalSettings] = useState<GlobalSettings>(JSON.parse(JSON.stringify(INITIAL_GLOBAL_SETTINGS)));
   
@@ -40,6 +43,7 @@ const App = () => {
   const [currentTime, setCurrentTime] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isSnappingEnabled, setIsSnappingEnabled] = useState(true);
+  const [easingMode, setEasingMode] = useState<'arrival' | 'departure'>('arrival');
 
   // Window Visibility States
   const [showAssets, setShowAssets] = useState(false);
@@ -140,10 +144,10 @@ const App = () => {
   useEffect(() => {
     if (engineRef.current) {
       const timeHasChanged = prevTimeRef.current !== currentTime;
-      engineRef.current.setTime(currentTime, objects, isPlaying, timeHasChanged);
+      engineRef.current.setTime(currentTime, objects, isPlaying, timeHasChanged, easingMode);
       prevTimeRef.current = currentTime;
     }
-  }, [currentTime, objects, isPlaying]);
+  }, [currentTime, objects, isPlaying, easingMode]);
 
   useEffect(() => {
     if (engineRef.current) engineRef.current.updateGlobalSettings(globalSettings);
@@ -174,6 +178,8 @@ const App = () => {
           if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
       };
   }, [isPlaying, totalDuration]);
+  
+  const selectedObject = objects.find(o => o.id === selectedId);
 
   // --- Actions ---
   const handleTogglePlay = () => {
@@ -293,6 +299,49 @@ const App = () => {
     }
   };
   
+  const handleCopyKeyframeAsYaml = async () => {
+    if (!selectedKeyframe || !selectedObject) return;
+    const kf = selectedObject.animations[selectedKeyframe.index];
+    if (kf && kf.values) {
+        try {
+            const yamlString = yaml.dump(kf.values);
+            await navigator.clipboard.writeText(yamlString);
+            setCopiedKeyframeYaml(yamlString);
+        } catch (error) {
+            console.error('Failed to copy YAML:', error);
+            alert('Failed to copy keyframe as YAML.');
+        }
+    }
+  };
+  
+  const handlePasteKeyframeFromYaml = async () => {
+    if (!selectedKeyframe || !selectedObject) return;
+    try {
+        const text = await navigator.clipboard.readText();
+        const parsedValues = yaml.load(text);
+
+        if (typeof parsedValues !== 'object' || parsedValues === null) {
+            throw new Error('Pasted content is not a valid object.');
+        }
+
+        setObjects(prev => prev.map(o => {
+            if (o.id !== selectedObject.id) return o;
+            const newAnims = [...o.animations];
+            if (!newAnims[selectedKeyframe.index]) return o;
+            
+            newAnims[selectedKeyframe.index] = {
+                ...newAnims[selectedKeyframe.index],
+                values: { ...newAnims[selectedKeyframe.index].values, ...parsedValues }
+            };
+            
+            return { ...o, animations: newAnims };
+        }));
+    } catch (error) {
+        console.error('Failed to paste YAML:', error);
+        alert('Failed to paste keyframe. Please ensure valid YAML is in your clipboard.');
+    }
+  };
+  
   const handleResetScene = () => {
       setAccentColor(DesignSystem.Color.Accent.Surface[1] as string);
       setObjects(JSON.parse(JSON.stringify(INITIAL_OBJECTS)));
@@ -326,8 +375,6 @@ const App = () => {
     }
   };
 
-  const selectedObject = objects.find(o => o.id === selectedId);
-
   const handleDrop = (e: React.DragEvent) => { e.preventDefault(); if (e.dataTransfer.files[0]) processFile(e.dataTransfer.files[0]); };
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => { if (e.target.files?.[0]) processFile(e.target.files[0]); };
   
@@ -359,7 +406,7 @@ const App = () => {
   
   // --- Prop Control Helpers ---
 
-  const getInterpolatedValueAtTime = (objData: SceneObject, property: string, localTime: number) => {
+  const getInterpolatedValueAtTime = (objData: SceneObject, property: string, localTime: number, mode: 'arrival' | 'departure') => {
     const baseValue = objData[property as keyof SceneObject];
     if (!objData.animations || objData.animations.length === 0) return baseValue;
 
@@ -373,25 +420,27 @@ const App = () => {
     };
     const baseKeyframe: TimelineKeyframe = { time: 0, values: {}, easing: 'power2.out' };
 
-    let kf1 = baseKeyframe;
-    let kf2: TimelineKeyframe | null = null;
+    let departureKf = baseKeyframe;
+    let arrivalKf: TimelineKeyframe | null = null;
     for (const kf of keyframes) {
-        if (kf.time <= localTime) kf1 = kf;
-        else { kf2 = kf; break; }
+        if (kf.time <= localTime) departureKf = kf;
+        else { arrivalKf = kf; break; }
     }
-    if (!kf2) kf2 = kf1;
+    if (!arrivalKf) arrivalKf = departureKf;
 
-    const kf1Values = { ...baseState, ...kf1.values };
-    const kf2Values = { ...baseState, ...kf2.values };
+    const departureValues = { ...baseState, ...departureKf.values };
+    const arrivalValues = { ...baseState, ...arrivalKf.values };
     
-    const startVal = kf1Values[property as keyof typeof kf1Values];
-    const endVal = kf2Values[property as keyof typeof kf2Values];
+    const startVal = departureValues[property as keyof typeof departureValues];
+    const endVal = arrivalValues[property as keyof typeof arrivalValues];
 
     if (startVal === undefined || endVal === undefined) return baseValue;
 
-    const duration = kf2.time - kf1.time;
-    const progress = duration > 0 ? (localTime - kf1.time) / duration : 1;
-    const ease = gsap.parseEase(kf2.easing || 'power2.out');
+    const duration = arrivalKf.time - departureKf.time;
+    const progress = duration > 0 ? (localTime - departureKf.time) / duration : 1;
+    
+    const easingSource = mode === 'arrival' ? arrivalKf : departureKf;
+    const ease = gsap.parseEase(easingSource.easing || 'power2.out');
     const easedProgress = ease(progress);
 
     return gsap.utils.interpolate(startVal, endVal, easedProgress);
@@ -410,7 +459,7 @@ const App = () => {
     }
     
     const localTime = currentTime - selectedObject.startTime;
-    const value = getInterpolatedValueAtTime(selectedObject, property, localTime);
+    const value = getInterpolatedValueAtTime(selectedObject, property, localTime, easingMode);
     if (axis !== undefined && Array.isArray(value)) return (value as any)[axis];
     return value;
   }
@@ -539,7 +588,18 @@ const App = () => {
           <ProjectSettingsPanel settings={globalSettings} setSettings={setGlobalSettings} />
       </Window>
 
-      <Window id="props" title="CONTROLS" isOpen={showProperties} onClose={() => setShowProperties(false)} width={280} onResetScene={handleResetScene}>
+      <Window 
+        id="props" 
+        title="CONTROLS" 
+        isOpen={showProperties} 
+        onClose={() => setShowProperties(false)} 
+        width={280} 
+        onResetScene={handleResetScene}
+        selectedKeyframe={selectedKeyframe}
+        copiedKeyframeYaml={copiedKeyframeYaml}
+        onCopyKeyframeAsYaml={handleCopyKeyframeAsYaml}
+        onPasteKeyframeFromYaml={handlePasteKeyframeFromYaml}
+      >
         <PropertiesPanel
             selectedObject={selectedObject}
             selectedKeyframe={selectedKeyframe}
@@ -568,6 +628,8 @@ const App = () => {
         height={450}
         isSnappingEnabled={isSnappingEnabled}
         onToggleSnapping={() => setIsSnappingEnabled(!isSnappingEnabled)}
+        easingMode={easingMode}
+        onToggleEasingMode={() => setEasingMode(p => p === 'arrival' ? 'departure' : 'arrival')}
       >
           <TimelineSequencer 
             objects={objects} 
