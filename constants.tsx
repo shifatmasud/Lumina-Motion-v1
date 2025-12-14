@@ -1,4 +1,5 @@
 
+
 import { DesignSystem } from './theme';
 import { SceneObject, GlobalSettings, TransitionEffect } from './engine';
 
@@ -67,6 +68,11 @@ export const INITIAL_GLOBAL_SETTINGS: GlobalSettings = {
     ambientLight: { color: '#ffffff', intensity: 0.4 },
     mainLight: { color: '#ffffff', intensity: 1.2, position: [5, 10, 7] },
     rimLight: { enabled: true, color: DesignSystem.Color.Accent.Surface[1] as string, intensity: 5.0, position: [0, 0, 1] },
+    performance: {
+        pixelRatio: Math.min(window.devicePixelRatio, 1.5),
+        shadowMapSize: 2048,
+    },
+    aspectRatio: 'free',
 };
 
 export const ACCENT_COLORS = ['#FF4F1F', '#BEF264', '#5865F2'];

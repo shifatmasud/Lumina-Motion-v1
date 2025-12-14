@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import { v4 as uuidv4 } from 'uuid';
@@ -11,6 +12,7 @@ import { TimelineSequencer } from './components/Section/Timeline';
 import { Dock } from './components/Section/Dock';
 import { AssetsPanel } from './components/Section/AssetsPanel';
 import { PropertiesPanel } from './components/Section/PropertiesPanel';
+import { ProjectSettingsPanel } from './components/Section/ProjectSettingsPanel';
 import { createYamlString } from './utils/yamlExporter';
 import { INITIAL_OBJECTS, INITIAL_GLOBAL_SETTINGS, defaultTransition } from './constants';
 
@@ -43,15 +45,73 @@ const App = () => {
   const [showAssets, setShowAssets] = useState(false);
   const [showTimeline, setShowTimeline] = useState(true);
   const [showProperties, setShowProperties] = useState(true);
+  const [showProjectSettings, setShowProjectSettings] = useState(false);
 
   // Control State
   const [isScaleLocked, setIsScaleLocked] = useState(false);
 
+  // --- Effects ---
+
+  // Aspect Ratio and Resize Handler
+  useEffect(() => {
+    const applyAspectRatio = () => {
+        if (!containerRef.current) return;
+        const canvasContainer = containerRef.current;
+        const parent = canvasContainer.parentElement;
+        if (!parent) return;
+        
+        const parentWidth = parent.clientWidth;
+        const parentHeight = parent.clientHeight;
+
+        if (globalSettings.aspectRatio === 'free' || !globalSettings.aspectRatio) {
+            canvasContainer.style.width = '100%';
+            canvasContainer.style.height = '100%';
+            canvasContainer.style.position = 'absolute';
+            canvasContainer.style.top = '0';
+            canvasContainer.style.left = '0';
+            canvasContainer.style.transform = 'none';
+        } else {
+            const [w, h] = globalSettings.aspectRatio.split(':').map(Number);
+            const targetRatio = w / h;
+            const parentRatio = parentWidth / parentHeight;
+
+            let newWidth, newHeight;
+            if (parentRatio > targetRatio) { // Pillarbox
+                newHeight = parentHeight;
+                newWidth = newHeight * targetRatio;
+            } else { // Letterbox
+                newWidth = parentWidth;
+                newHeight = newWidth / targetRatio;
+            }
+
+            canvasContainer.style.width = `${newWidth}px`;
+            canvasContainer.style.height = `${newHeight}px`;
+            canvasContainer.style.position = 'absolute';
+            canvasContainer.style.top = '50%';
+            canvasContainer.style.left = '50%';
+            canvasContainer.style.transform = 'translate(-50%, -50%)';
+        }
+
+        if (engineRef.current) {
+            engineRef.current.onResize();
+        }
+    };
+
+    applyAspectRatio();
+    const resizeObserver = new ResizeObserver(applyAspectRatio);
+    if (containerRef.current?.parentElement) {
+        resizeObserver.observe(containerRef.current.parentElement);
+    }
+    
+    return () => {
+        resizeObserver.disconnect();
+    };
+  }, [globalSettings.aspectRatio]);
+
   const adjustColor = (color: string, amount: number) => {
       return '#' + color.replace(/^#/, '').match(/.{1,2}/g)!.map(c => Math.max(0, Math.min(255, parseInt(c, 16) + amount)).toString(16).padStart(2, '0')).join('');
   }
-
-  // --- Effects ---
+  
   // Theme Update
   useEffect(() => {
     document.documentElement.style.setProperty('--accent-surface', accentColor);
@@ -448,9 +508,17 @@ const App = () => {
 
   return (
     <div style={{ width: '100%', height: '100%', position: 'relative', overflow: 'hidden', background: DesignSystem.Color.Base.Surface[1] }}>
-      <div ref={containerRef} style={{ width: '100%', height: '100%', zIndex: 0 }} />
+      <div ref={containerRef} style={{ zIndex: 0 }} />
 
-      <Window id="assets" title="ASSETS" isOpen={showAssets} onClose={() => setShowAssets(false)} width={300} height={420}>
+      <Window 
+        id="assets" 
+        title="ASSETS" 
+        isOpen={showAssets} 
+        onClose={() => setShowAssets(false)} 
+        width={300} 
+        height={420}
+        onOpenProjectSettings={() => setShowProjectSettings(true)}
+      >
          <AssetsPanel 
             onAddObject={handleAddObject} 
             onExportVideo={handleExportVideo} 
@@ -458,6 +526,17 @@ const App = () => {
             onFileDrop={handleDrop} 
             onFileUpload={handleFileUpload} 
         />
+      </Window>
+
+      <Window
+        id="project-settings"
+        title="PROJECT SETTINGS"
+        isOpen={showProjectSettings}
+        onClose={() => setShowProjectSettings(false)}
+        width={320}
+        height={480}
+      >
+          <ProjectSettingsPanel settings={globalSettings} setSettings={setGlobalSettings} />
       </Window>
 
       <Window id="props" title="CONTROLS" isOpen={showProperties} onClose={() => setShowProperties(false)} width={280} onResetScene={handleResetScene}>

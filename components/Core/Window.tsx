@@ -1,8 +1,9 @@
 
+
 import React, { useRef, useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence, useDragControls } from 'framer-motion';
-import { DotsThree, ArrowCounterClockwise, ArrowClockwise, CornersOut, Minus, X } from '@phosphor-icons/react';
+import { DotsThree, ArrowCounterClockwise, ArrowClockwise, CornersOut, Minus, X, Gear } from '@phosphor-icons/react';
 import { DesignSystem } from '../../theme';
 import { Button } from './Primitives';
 
@@ -19,6 +20,7 @@ interface WindowProps {
   isSnappingEnabled?: boolean;
   onToggleSnapping?: () => void;
   onResetScene?: () => void;
+  onOpenProjectSettings?: () => void;
 }
 
 // Context Menu Portal
@@ -29,7 +31,8 @@ const ContextMenu: React.FC<{
   isSnappingEnabled?: boolean;
   onToggleSnapping?: () => void;
   onResetScene?: () => void;
-}> = ({ rect, onClose, windowId, isSnappingEnabled, onToggleSnapping, onResetScene }) => {
+  onOpenProjectSettings?: () => void;
+}> = ({ rect, onClose, windowId, isSnappingEnabled, onToggleSnapping, onResetScene, onOpenProjectSettings }) => {
   const handleItemClick = (action?: () => void) => {
     action?.();
     onClose();
@@ -64,6 +67,35 @@ const ContextMenu: React.FC<{
           gap: '2px'
         }}
       >
+        {windowId === 'assets' && onOpenProjectSettings && (
+            <>
+            <div 
+                onClick={() => handleItemClick(onOpenProjectSettings)}
+                style={{ 
+                    padding: '8px 12px', 
+                    ...DesignSystem.Type.Label.S, 
+                    color: DesignSystem.Color.Base.Content[2],
+                    cursor: 'pointer',
+                    borderRadius: DesignSystem.Effect.Radius.S,
+                    transition: '0.1s',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: DesignSystem.Space(2)
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = DesignSystem.Color.Base.Surface[3];
+                  e.currentTarget.style.color = DesignSystem.Color.Base.Content[1];
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'transparent';
+                  e.currentTarget.style.color = DesignSystem.Color.Base.Content[2];
+                }}
+            >
+                <Gear size={14} /> Project Settings
+            </div>
+            <div style={{height: '1px', background: DesignSystem.Color.Base.Border[1], margin: '4px 6px'}} />
+            </>
+        )}
         {windowId === 'props' && onResetScene && (
             <>
             <div 
@@ -156,6 +188,7 @@ export const Window: React.FC<WindowProps> = ({
   isSnappingEnabled,
   onToggleSnapping,
   onResetScene,
+  onOpenProjectSettings,
 }) => {
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const [showMenu, setShowMenu] = useState(false);
@@ -347,6 +380,7 @@ export const Window: React.FC<WindowProps> = ({
               isSnappingEnabled={isSnappingEnabled}
               onToggleSnapping={onToggleSnapping}
               onResetScene={onResetScene}
+              onOpenProjectSettings={onOpenProjectSettings}
             />
         )}
       </AnimatePresence>

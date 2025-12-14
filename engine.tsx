@@ -1,5 +1,6 @@
 
 
+
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
@@ -77,6 +78,11 @@ export interface GlobalSettings {
   ambientLight: { color: string; intensity: number; };
   mainLight: { color: string; intensity: number; position: [number, number, number]; };
   rimLight: { enabled: boolean; color: string; intensity: number; position: [number, number, number]; };
+  performance: {
+    pixelRatio: number;
+    shadowMapSize: 1024 | 2048 | 4096;
+  };
+  aspectRatio: string;
 }
 
 const chromaKeyVertexShader = `
@@ -178,7 +184,7 @@ export class Engine {
     this.scene.add(this.ground);
 
     // Camera
-    this.camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+    this.camera = new THREE.PerspectiveCamera(60, container.clientWidth / container.clientHeight, 0.1, 1000);
     this.camera.position.set(0, 0, 6);
     
     // Audio Listener
@@ -187,7 +193,7 @@ export class Engine {
 
     // Renderer
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
-    this.renderer.setSize(window.innerWidth, window.innerHeight);
+    this.renderer.setSize(container.clientWidth, container.clientHeight);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.0;
@@ -202,7 +208,7 @@ export class Engine {
     const renderPass = new RenderPass(this.scene, this.camera);
     this.composer.addPass(renderPass);
 
-    this.bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.4, 0.85);
+    this.bloomPass = new UnrealBloomPass(new THREE.Vector2(container.clientWidth, container.clientHeight), 1.5, 0.4, 0.85);
     this.bloomPass.enabled = false;
     this.composer.addPass(this.bloomPass);
 
@@ -234,8 +240,11 @@ export class Engine {
     this.rimLight = new THREE.SpotLight(0x5B50FF, 5);
     this.rimLight.position.set(-5, 0, -5);
     this.rimLight.lookAt(0,0,0);
-    this.rimLight.castShadow = true;
-    this.rimLight.shadow.blurSamples = 16;
+    this.rimLight.angle = Math.PI / 4;
+    this.rimLight.penumbra = 1; // Soft edge
+    this.rimLight.decay = 2; // Realistic falloff
+    this.rimLight.distance = 20;
+    this.rimLight.castShadow = false; // Rim lights should not cast shadows
     this.scene.add(this.rimLight);
 
     // Controls
@@ -260,15 +269,19 @@ export class Engine {
   }
 
   onResize() {
-    this.camera.aspect = window.innerWidth / window.innerHeight;
+    const width = this.container.clientWidth;
+    const height = this.container.clientHeight;
+    if (height === 0) return;
+
+    this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
-    this.renderer.setSize(window.innerWidth, window.innerHeight);
-    this.composer.setSize(window.innerWidth, window.innerHeight);
+    this.renderer.setSize(width, height);
+    this.composer.setSize(width, height);
   }
 
   onPointerDown(event: PointerEvent) {
-    this.pointer.x = (event.clientX / window.innerWidth) * 2 - 1;
-    this.pointer.y = -(event.clientY / window.innerHeight) * 2 + 1;
+    this.pointer.x = (event.clientX / this.container.clientWidth) * 2 - 1;
+    this.pointer.y = -(event.clientY / this.container.clientHeight) * 2 + 1;
 
     this.raycaster.setFromCamera(this.pointer, this.camera);
     const intersects = this.raycaster.intersectObjects(Array.from(this.objectsMap.values()), true); 
@@ -866,6 +879,18 @@ export class Engine {
       this.ground.visible = settings.showGround;
       if (this.ground.material instanceof THREE.MeshStandardMaterial) {
         this.ground.material.color.set(settings.groundColor);
+      }
+      
+      // Performance Settings
+      this.renderer.setPixelRatio(settings.performance.pixelRatio);
+      if (this.mainLight.shadow.mapSize.width !== settings.performance.shadowMapSize) {
+          this.mainLight.shadow.mapSize.width = settings.performance.shadowMapSize;
+          this.mainLight.shadow.mapSize.height = settings.performance.shadowMapSize;
+          // Important: We need to update the shadow map itself
+          if (this.mainLight.shadow.map) {
+              this.mainLight.shadow.map.dispose();
+              this.mainLight.shadow.map = null as any;
+          }
       }
   }
 
