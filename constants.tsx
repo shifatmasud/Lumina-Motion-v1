@@ -34,7 +34,7 @@ export const INITIAL_OBJECTS: SceneObject[] = [
       rotation: [0, 0, 0],
       scale: [1, 1, 1],
       startTime: 0,
-      duration: 300,
+      duration: 1,
       animations: [],
       introTransition: { ...defaultTransition },
       outroTransition: { ...defaultTransition },
@@ -57,17 +57,19 @@ export const INITIAL_OBJECTS: SceneObject[] = [
     }
 ];
 
+export const DEFAULT_ACCENT_COLOR = '#5B50FF';
+
 export const INITIAL_GLOBAL_SETTINGS: GlobalSettings = {
     backgroundColor: '#000000',
     bloom: { enabled: false, strength: 0.2, threshold: 0.85, radius: 0.5 },
     vignette: { enabled: false, offset: 1.0, darkness: 1.0 },
-    accentColor: DesignSystem.Color.Accent.Surface[1] as string,
+    accentColor: DEFAULT_ACCENT_COLOR,
     showGrid: true,
     showGround: true,
     groundColor: '#050505',
     ambientLight: { color: '#ffffff', intensity: 0.4 },
     mainLight: { color: '#ffffff', intensity: 1.2, position: [5, 10, 7] },
-    rimLight: { enabled: true, color: DesignSystem.Color.Accent.Surface[1] as string, intensity: 5.0, position: [0, 0, 1] },
+    rimLight: { enabled: true, color: DEFAULT_ACCENT_COLOR, intensity: 5.0, position: [0, 0, 1] },
     performance: {
         pixelRatio: Math.min(window.devicePixelRatio, 1.5),
         shadowMapSize: 2048,
@@ -75,7 +77,7 @@ export const INITIAL_GLOBAL_SETTINGS: GlobalSettings = {
     aspectRatio: 'free',
 };
 
-export const ACCENT_COLORS = ['#FF4F1F', '#BEF264', '#5865F2'];
+export const ACCENT_COLORS = [DEFAULT_ACCENT_COLOR, '#FF4F1F', '#BEF264', '#5865F2'];
 
 export const EASING_OPTIONS = [
   { label: 'Default (Ease Out)', value: 'power2.out' },

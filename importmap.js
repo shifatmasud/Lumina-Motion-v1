@@ -17,6 +17,8 @@
     "gsap": "https://esm.sh/gsap@3.13.0",
     "@phosphor-icons/react": "https://esm.sh/@phosphor-icons/react@2.1.0?deps=react@18.2.0",
     "uuid": "https://esm.sh/uuid@9.0.1",
-    "js-yaml": "https://esm.sh/js-yaml@4.1.0"
+    "js-yaml": "https://esm.sh/js-yaml@4.1.0",
+    "jszip": "https://esm.sh/jszip@3.10.1",
+    "webm-writer": "https://esm.sh/webm-writer@0.3.0"
   }
 }

@@ -14,8 +14,9 @@ import { Dock } from './components/Section/Dock';
 import { AssetsPanel } from './components/Section/AssetsPanel';
 import { PropertiesPanel } from './components/Section/PropertiesPanel';
 import { ProjectSettingsPanel } from './components/Section/ProjectSettingsPanel';
+import { ExportModal } from './components/Package/ExportModal';
 import { createYamlString } from './utils/yamlExporter';
-import { INITIAL_OBJECTS, INITIAL_GLOBAL_SETTINGS, defaultTransition } from './constants';
+import { INITIAL_OBJECTS, INITIAL_GLOBAL_SETTINGS, defaultTransition, DEFAULT_ACCENT_COLOR } from './constants';
 
 import './index.css';
 
@@ -27,7 +28,7 @@ const App = () => {
   const prevTimeRef = useRef(0);
 
   // --- State ---
-  const [accentColor, setAccentColor] = useState(DesignSystem.Color.Accent.Surface[1] as string);
+  const [accentColor, setAccentColor] = useState(DEFAULT_ACCENT_COLOR);
   const [objects, setObjects] = useState<SceneObject[]>(JSON.parse(JSON.stringify(INITIAL_OBJECTS)));
   const [selectedId, setSelectedId] = useState<string | null>('1');
   
@@ -39,7 +40,7 @@ const App = () => {
   const [globalSettings, setGlobalSettings] = useState<GlobalSettings>(JSON.parse(JSON.stringify(INITIAL_GLOBAL_SETTINGS)));
   
   // Timeline State
-  const [totalDuration, setTotalDuration] = useState(10); // in seconds
+  const [totalDuration, setTotalDuration] = useState(5); // in seconds
   const [currentTime, setCurrentTime] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isSnappingEnabled, setIsSnappingEnabled] = useState(true);
@@ -50,6 +51,7 @@ const App = () => {
   const [showTimeline, setShowTimeline] = useState(true);
   const [showProperties, setShowProperties] = useState(true);
   const [showProjectSettings, setShowProjectSettings] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
 
   // Control State
   const [isScaleLocked, setIsScaleLocked] = useState(false);
@@ -178,7 +180,34 @@ const App = () => {
           if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
       };
   }, [isPlaying, totalDuration]);
+
+  // Dynamic Camera Duration
+  useEffect(() => {
+    const camera = objects.find(o => o.id === 'camera-main');
+    if (!camera) return;
+
+    const otherObjects = objects.filter(o => o.id !== 'camera-main');
+    const endTimes = otherObjects.map(o => o.startTime + o.duration);
+    const maxEndTime = Math.max(0, ...endTimes); 
+
+    const newCameraDuration = Math.max(1, maxEndTime);
+
+    if (camera.duration !== newCameraDuration) {
+      setObjects(prev => prev.map(o => 
+        o.id === 'camera-main' 
+          ? { ...o, duration: newCameraDuration } 
+          : o
+      ));
+    }
+  }, [objects]);
   
+  // Dynamic Total Duration
+  useEffect(() => {
+    const endTimes = objects.map(o => o.startTime + o.duration);
+    const maxEndTime = Math.max(0, ...endTimes);
+    setTotalDuration(Math.max(5, maxEndTime));
+  }, [objects]);
+
   const selectedObject = objects.find(o => o.id === selectedId);
 
   // --- Prop Control Helpers ---
@@ -469,17 +498,13 @@ const App = () => {
   };
   
   const handleResetScene = () => {
-      setAccentColor(DesignSystem.Color.Accent.Surface[1] as string);
+      setAccentColor(DEFAULT_ACCENT_COLOR);
       setObjects(JSON.parse(JSON.stringify(INITIAL_OBJECTS)));
       setGlobalSettings(JSON.parse(JSON.stringify(INITIAL_GLOBAL_SETTINGS)));
       setSelectedId('1');
       setCurrentTime(0);
       setIsPlaying(false);
       setSelectedKeyframe(null);
-  };
-
-  const handleExportVideo = () => {
-      alert("Video Export initiated... (Simulation)");
   };
 
   const handleExportYaml = () => {
@@ -643,6 +668,14 @@ const App = () => {
     <div style={{ width: '100%', height: '100%', position: 'relative', overflow: 'hidden', background: DesignSystem.Color.Base.Surface[1] }}>
       <div ref={containerRef} style={{ zIndex: 0 }} />
 
+      <ExportModal
+        isOpen={showExportModal}
+        onClose={() => setShowExportModal(false)}
+        engine={engineRef.current}
+        objects={objects}
+        totalDuration={totalDuration}
+      />
+
       <Window 
         id="assets" 
         title="ASSETS" 
@@ -654,7 +687,7 @@ const App = () => {
       >
          <AssetsPanel 
             onAddObject={handleAddObject} 
-            onExportVideo={handleExportVideo} 
+            onExportVideo={() => setShowExportModal(true)} 
             onExportYaml={handleExportYaml} 
             onFileDrop={handleDrop} 
             onFileUpload={handleFileUpload} 
