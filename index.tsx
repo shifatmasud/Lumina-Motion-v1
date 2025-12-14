@@ -1,247 +1,24 @@
 
-
 import React, { useState, useEffect, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import { v4 as uuidv4 } from 'uuid';
-import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  Cube, 
-  FilmStrip, 
-  Faders, 
-  SquaresFour, 
-  Plus, 
-  Trash,
-  Image as ImageIcon,
-  VideoCamera,
-  Monitor,
-  Sparkle,
-  PaintBrush,
-  ToggleLeft,
-  CaretDown,
-  Export,
-  Camera as CameraIcon,
-  MusicNotes,
-  SpeakerHigh,
-  Palette,
-  Diamond,
-  Cylinder,
-  Eye,
-  Lightbulb,
-  Lock,
-  LockOpen
-} from '@phosphor-icons/react';
 import gsap from 'gsap';
-import yaml from 'js-yaml';
 
 import { DesignSystem } from './theme';
-import { Engine, SceneObject, GlobalSettings, TransitionEffect, TimelineKeyframe } from './engine';
+import { Engine, SceneObject, GlobalSettings, TimelineKeyframe } from './engine';
 import { Window } from './components/Core/Window';
-import { Button, Input, Slider, Toggle, Divider, Group, Select } from './components/Core/Primitives';
 import { TimelineSequencer } from './components/Section/Timeline';
+import { Dock } from './components/Section/Dock';
+import { AssetsPanel } from './components/Section/AssetsPanel';
+import { PropertiesPanel } from './components/Section/PropertiesPanel';
+import { createYamlString } from './utils/yamlExporter';
+import { INITIAL_OBJECTS, INITIAL_GLOBAL_SETTINGS, defaultTransition } from './constants';
 
 import './index.css';
-
-const defaultTransition: TransitionEffect = {
-  type: 'none', 
-  duration: 0.5,
-  delay: 0,
-  fade: true,
-  scale: 0.8,
-  position: [0, 0, 0],
-  rotation: [0, 0, 0],
-  easing: 'power2.out',
-};
-
-const materialPresets: { [key: string]: Partial<SceneObject> } = {
-    'default': { metalness: 0.2, roughness: 0.1, transmission: 0, ior: 1.5, thickness: 0.5, clearcoat: 0, clearcoatRoughness: 0, opacity: 1 },
-    'clay': { metalness: 0, roughness: 1.0, transmission: 0, clearcoat: 0, ior: 1.4, opacity: 1 },
-    'glass': { metalness: 0, roughness: 0.02, transmission: 1.0, ior: 1.5, thickness: 1.2, clearcoat: 1.0, clearcoatRoughness: 0.05, opacity: 1 },
-    'frostedGlass': { metalness: 0, roughness: 0.45, transmission: 1.0, ior: 1.5, thickness: 1.2, clearcoat: 0.1, clearcoatRoughness: 0.1, opacity: 1 },
-    'metal': { metalness: 1.0, roughness: 0.1, transmission: 0, clearcoat: 0.5, clearcoatRoughness: 0.1, ior: 2.5, opacity: 1 },
-    'chrome': { metalness: 1.0, roughness: 0.0, transmission: 0, clearcoat: 1.0, clearcoatRoughness: 0.0, ior: 2.5, opacity: 1 },
-    'plastic': { metalness: 0.1, roughness: 0.5, transmission: 0, clearcoat: 0.5, clearcoatRoughness: 0.1, ior: 1.5, opacity: 1 },
-    'water': { metalness: 0.1, roughness: 0.1, transmission: 0.9, ior: 1.33, thickness: 1.0, clearcoat: 1.0, clearcoatRoughness: 0, opacity: 1 },
-};
-
-const INITIAL_OBJECTS: SceneObject[] = [
-    {
-      id: 'camera-main',
-      type: 'camera',
-      name: 'Main Camera',
-      position: [0, 0, 6],
-      rotation: [0, 0, 0],
-      scale: [1, 1, 1],
-      startTime: 0,
-      duration: 300,
-      animations: [],
-      introTransition: { ...defaultTransition },
-      outroTransition: { ...defaultTransition },
-      fov: 60
-    },
-    { 
-      id: '1', 
-      type: 'mesh', 
-      name: 'Cube',
-      position: [0, 0.5, 0], 
-      rotation: [0, 0, 0], 
-      scale: [1, 1, 1], 
-      color: '#ffffff',
-      ...materialPresets.default,
-      startTime: 0,
-      duration: 5,
-      animations: [],
-      introTransition: { ...defaultTransition },
-      outroTransition: { ...defaultTransition },
-    }
-];
-
-const INITIAL_GLOBAL_SETTINGS: GlobalSettings = {
-    backgroundColor: '#000000',
-    bloom: { enabled: false, strength: 0.2, threshold: 0.85, radius: 0.5 },
-    vignette: { enabled: false, offset: 1.0, darkness: 1.0 },
-    accentColor: DesignSystem.Color.Accent.Surface[1] as string,
-    showGrid: true,
-    showGround: true,
-    groundColor: '#050505',
-    ambientLight: { color: '#ffffff', intensity: 0.4 },
-    mainLight: { color: '#ffffff', intensity: 1.2, position: [5, 10, 7] },
-    rimLight: { enabled: true, color: DesignSystem.Color.Accent.Surface[1] as string, intensity: 5.0, position: [0, 0, 1] },
-};
-
-const ACCENT_COLORS = ['#FF4F1F', '#BEF264', '#5865F2'];
-
-const EASING_OPTIONS = [
-  { label: 'Default (Ease Out)', value: 'power2.out' },
-  { label: 'Linear', value: 'none' },
-  { label: 'Ease In', value: 'power2.in' },
-  { label: 'Ease In-Out', value: 'power2.inOut' },
-  { label: 'Bounce Out', value: 'bounce.out' },
-  { label: 'Elastic Out', value: 'elastic.out(1, 0.75)' },
-  { label: 'Anticipate (Back In)', value: 'back.in(1.7)' },
-  { label: 'Overshoot (Back Out)', value: 'back.out(1.7)' },
-];
-
-const createYamlString = (settingsData: GlobalSettings, objectsData: SceneObject[]): string => {
-  // Helper to build a category object, returning undefined if it has no valid keys
-  const buildCategory = (data: object) => {
-    // This trick removes keys with `undefined` values
-    const cleaned = JSON.parse(JSON.stringify(data));
-    return Object.keys(cleaned).length > 0 ? cleaned : undefined;
-  };
-  
-  const scene = {
-    projectName: "My Lumina Scene",
-    version: "1.3-humane-yaml",
-    exportedAt: new Date().toISOString(),
-    settings: {
-      backgroundColor: settingsData.backgroundColor,
-      ground: { show: settingsData.showGround, color: settingsData.groundColor },
-      grid: { show: settingsData.showGrid },
-      lighting: {
-        ambient: settingsData.ambientLight,
-        main: settingsData.mainLight,
-        rim: settingsData.rimLight,
-      },
-      effects: {
-        bloom: settingsData.bloom,
-        vignette: settingsData.vignette,
-      },
-    },
-    timeline: objectsData.map(obj => {
-      const {
-        id, name, type, startTime, duration, position, rotation, scale,
-        animations, introTransition, outroTransition,
-        
-        url, width, height, color, opacity,
-        metalness, roughness, transmission, ior, thickness, clearcoat, clearcoatRoughness,
-        extrusion, pathLength, curvature,
-        volume, loop, chromaKey, fov
-      } = obj;
-      
-      const objectYaml: any = {
-        id,
-        name: name || `Unnamed ${type}`,
-        type,
-        timing: { start: startTime, duration },
-        transform: {
-          position: { x: position[0], y: position[1], z: position[2] },
-          rotation: { x: rotation[0], y: rotation[1], z: rotation[2] },
-          scale: { x: scale[0], y: scale[1], z: scale[2] },
-        },
-      };
-
-      // Conditionally add categories
-      objectYaml.appearance = buildCategory({ color, opacity });
-      objectYaml.material = buildCategory({ metalness, roughness, transmission, ior, thickness, clearcoat, clearcoatRoughness });
-      objectYaml.geometry = buildCategory({ extrusion, pathLength });
-      objectYaml.distortion = buildCategory({ cylinder_wrap: curvature });
-      objectYaml.media = buildCategory({ url, width, height, volume, loop });
-      objectYaml.effects = buildCategory({ chroma_key: chromaKey });
-      objectYaml.camera_settings = buildCategory({ fov });
-
-      if (animations && animations.length > 0) {
-        objectYaml.keyframes = animations.map(({ time, values, easing }) => ({
-          time,
-          values: JSON.parse(JSON.stringify(values)), // clean undefined
-          easing
-        }));
-      }
-
-      const transitions: any = {};
-      if (introTransition && introTransition.type !== 'none') transitions.intro = introTransition;
-      if (outroTransition && outroTransition.type !== 'none') transitions.outro = outroTransition;
-      if (Object.keys(transitions).length > 0) objectYaml.transitions = transitions;
-
-      return JSON.parse(JSON.stringify(objectYaml));
-    })
-  };
-
-  const header = `# 👋 Hello! This is a Lumina scene file.
-# It's a human-friendly recipe for your animation. You can edit this directly!
-#
-# --- STRUCTURE ---
-#
-# settings:       Global styles for the whole scene (background, lighting, effects).
-# timeline:       A list of all the objects (actors) in your scene.
-#
-# --- OBJECTS (in timeline) ---
-#
-# id:             A unique identifier for the object.
-# name:           The friendly name you see in the editor.
-# type:           What kind of object it is (mesh, video, camera, etc.).
-# timing:         When it appears (start) and for how long (duration), in seconds.
-# transform:      Its initial position, rotation, and scale.
-# appearance:     How it looks (color, opacity).
-# material:       Surface properties (metal, glass, plastic).
-# keyframes:      The animation script for this object over time.
-# transitions:    Special intro/outro effects.
-#
-# Enjoy creating!
-# --------------------------------------------------------------------------\n\n`;
-  
-  return header + yaml.dump(scene, { indent: 2, skipInvalid: true, noRefs: true });
-};
-
-
-const PropSlider = ({ label, value, onChange, isMode, ...props }: any) => {
-    const resetValue = label.toLowerCase().includes('scale') ? 1 : 0;
-    return (
-        <div style={{ position: 'relative', padding: isMode ? '4px' : '0', border: isMode ? `1px dashed ${DesignSystem.Color.Feedback.Warning}` : 'none', borderRadius: '8px', margin: isMode ? '-4px' : '0' }}>
-             <Slider 
-                  label={label} 
-                  value={value} 
-                  onChange={onChange}
-                  resetValue={resetValue}
-                  {...props} 
-             />
-        </div>
-    )
-}
 
 const App = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   const engineRef = useRef<Engine | null>(null);
-  const dockConstraintsRef = useRef(null);
   const animationFrameRef = useRef<number>();
   const lastTimeRef = useRef<number>();
   const prevTimeRef = useRef(0);
@@ -269,6 +46,10 @@ const App = () => {
 
   // Control State
   const [isScaleLocked, setIsScaleLocked] = useState(false);
+
+  const adjustColor = (color: string, amount: number) => {
+      return '#' + color.replace(/^#/, '').match(/.{1,2}/g)!.map(c => Math.max(0, Math.min(255, parseInt(c, 16) + amount)).toString(16).padStart(2, '0')).join('');
+  }
 
   // --- Effects ---
   // Theme Update
@@ -356,7 +137,7 @@ const App = () => {
       color: (type === 'mesh' || type === 'svg') ? accentColor : undefined,
       extrusion: type === 'svg' ? 0.1 : undefined,
       pathLength: type === 'svg' ? 1.0 : undefined,
-      ...(type === 'svg' ? materialPresets.plastic : materialPresets.default),
+      metalness: 0.2, roughness: 0.1, transmission: 0, ior: 1.5, thickness: 0.5, clearcoat: 0, clearcoatRoughness: 0,
       opacity: 1.0,
       curvature: 0,
       volume: type === 'audio' || type === 'video' ? 1.0 : undefined,
@@ -452,11 +233,6 @@ const App = () => {
     }
   };
   
-  const handlePresetChange = (presetKey: string) => {
-    if (!selectedId || !materialPresets[presetKey]) return;
-    handleUpdateObject(selectedId, materialPresets[presetKey]);
-  };
-  
   const handleResetScene = () => {
       setAccentColor(DesignSystem.Color.Accent.Surface[1] as string);
       setObjects(JSON.parse(JSON.stringify(INITIAL_OBJECTS)));
@@ -520,10 +296,6 @@ const App = () => {
       else if (type.startsWith('audio/') || name.endsWith('.wav') || name.endsWith('.mp3') || name.endsWith('.ogg')) handleAddObject('audio', url);
       else if (name.endsWith('.glb') || name.endsWith('.gltf')) handleAddObject('glb', url);
   };
-
-  const adjustColor = (color: string, amount: number) => {
-      return '#' + color.replace(/^#/, '').match(/.{1,2}/g)!.map(c => Math.max(0, Math.min(255, parseInt(c, 16) + amount)).toString(16).padStart(2, '0')).join('');
-  }
   
   // --- Prop Control Helpers ---
 
@@ -660,12 +432,6 @@ const App = () => {
     }));
   };
   
-  const getSelectedKeyframeEasing = () => {
-    if (!selectedKeyframe || !selectedObject) return 'power2.out';
-    const kf = selectedObject.animations[selectedKeyframe.index];
-    return kf?.easing || 'power2.out';
-  }
-
   const handleLightSettingChange = (light: 'ambientLight' | 'mainLight' | 'rimLight', property: string, value: any, axis?: number) => {
     setGlobalSettings(g => {
         const newLightSettings = { ...g[light] } as any;
@@ -681,463 +447,37 @@ const App = () => {
   };
 
   return (
-    <div ref={dockConstraintsRef} style={{ width: '100%', height: '100%', position: 'relative', overflow: 'hidden', background: DesignSystem.Color.Base.Surface[1] }}>
+    <div style={{ width: '100%', height: '100%', position: 'relative', overflow: 'hidden', background: DesignSystem.Color.Base.Surface[1] }}>
       <div ref={containerRef} style={{ width: '100%', height: '100%', zIndex: 0 }} />
 
       <Window id="assets" title="ASSETS" isOpen={showAssets} onClose={() => setShowAssets(false)} width={300} height={420}>
-         <div onDragOver={(e) => e.preventDefault()} onDrop={handleDrop} style={{ height: '100%', display: 'flex', flexDirection: 'column', gap: DesignSystem.Space(3) }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: DesignSystem.Space(2) }}>
-                <Button onClick={() => handleAddObject('mesh')} style={{ flexDirection: 'column', height: '90px', gap: '8px' }}>
-                    <div style={{ width: '32px', height: '32px', background: DesignSystem.Color.Base.Surface[2], borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: DesignSystem.Color.Accent.Surface[1] }}>
-                        <Cube size={18} weight="fill" />
-                    </div> <span style={DesignSystem.Type.Label.S}>Cube</span>
-                </Button>
-                <label style={{ display: 'contents' }}>
-                    <input type="file" accept=".png,.jpg,.jpeg,.webp,.mp4,.svg,.wav,.mp3,.ogg,.glb,.gltf" hidden onChange={handleFileUpload} />
-                    <Button as="div" style={{ flexDirection: 'column', height: '90px', gap: '8px' }}>
-                        <div style={{ width: '32px', height: '32px', background: DesignSystem.Color.Base.Surface[2], borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                             <Plus size={18} />
-                        </div> <span style={DesignSystem.Type.Label.S}>Import</span>
-                    </Button>
-                </label>
-            </div>
-            
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: DesignSystem.Space(2) }}>
-                <Button onClick={handleExportVideo} variant="primary" style={{ width: '100%', gap: '8px' }}>
-                    <Export size={16} weight="bold" /> VIDEO
-                </Button>
-                <Button onClick={handleExportYaml} variant="secondary" style={{ width: '100%', gap: '8px' }}>
-                    <Export size={16} weight="bold" /> YAML
-                </Button>
-            </div>
-
-            <Divider />
-            <div style={{ flex: 1, border: `1px dashed ${DesignSystem.Color.Base.Border[2]}`, borderRadius: DesignSystem.Effect.Radius.M, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '8px', color: DesignSystem.Color.Base.Content[3], background: 'rgba(255,255,255,0.01)', textAlign: 'center', padding: '12px' }}>
-                <ImageIcon size={24} /> <span style={DesignSystem.Type.Label.S}>Drag PNG, JPG, MP4, WAV, GLB...</span>
-            </div>
-         </div>
+         <AssetsPanel 
+            onAddObject={handleAddObject} 
+            onExportVideo={handleExportVideo} 
+            onExportYaml={handleExportYaml} 
+            onFileDrop={handleDrop} 
+            onFileUpload={handleFileUpload} 
+        />
       </Window>
 
       <Window id="props" title="CONTROLS" isOpen={showProperties} onClose={() => setShowProperties(false)} width={280} onResetScene={handleResetScene}>
-        {selectedObject ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: DesignSystem.Space(3) }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: DesignSystem.Color.Base.Surface[2], padding: DesignSystem.Space(2), borderRadius: DesignSystem.Effect.Radius.M }}>
-                    <div style={{ display: 'flex', flexDirection: 'column' }}>
-                        <span style={{ ...DesignSystem.Type.Label.S, color: DesignSystem.Color.Accent.Content[2] }}>{selectedObject.name || (selectedObject.type === 'camera' ? 'MAIN CAMERA' : selectedObject.type)}</span>
-                        <span style={{ ...DesignSystem.Type.Label.S, color: DesignSystem.Color.Base.Content[3] }}>#{selectedObject.id.slice(0,4)}</span>
-                    </div>
-                    {selectedKeyframe?.id === selectedObject.id && (
-                        <div style={{ background: DesignSystem.Color.Feedback.Warning, color: '#000', padding: '2px 6px', borderRadius: '4px', fontSize: '9px', fontWeight: 'bold' }}>KEYFRAME EDIT</div>
-                    )}
-                </div>
-
-                <AnimatePresence>
-                {selectedKeyframe?.id === selectedId && (
-                    <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} style={{ overflow: 'hidden' }}>
-                       <Group title="KEYFRAME" icon={<Diamond weight="fill" />}>
-                           <Select
-                               label="EASING"
-                               value={getSelectedKeyframeEasing()}
-                               onChange={(e) => handleKeyframePropertyChange('easing', e.target.value)}
-                           >
-                              {EASING_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
-                           </Select>
-                           <Button 
-                                variant="secondary" 
-                                onClick={handleRemoveKeyframe} 
-                                style={{ width: '100%', color: DesignSystem.Color.Feedback.Error, borderColor: 'rgba(255, 68, 68, 0.2)' }}
-                           >
-                                <Trash size={14} weight="bold" /> REMOVE KEYFRAME
-                           </Button>
-                       </Group>
-                    </motion.div>
-                )}
-                </AnimatePresence>
-                
-                <Group title="TRANSFORM">
-                  <PropSlider 
-                    label="POS X" 
-                    value={getControlValue('position', 0)}
-                    onChange={(v: number) => handleControlChange('position', v, 0)}
-                    isMode={selectedKeyframe?.id === selectedId}
-                    min={-10} max={10} step={0.1} 
-                  />
-                  <PropSlider 
-                    label="POS Y" 
-                    value={getControlValue('position', 1)}
-                    onChange={(v: number) => handleControlChange('position', v, 1)}
-                    isMode={selectedKeyframe?.id === selectedId}
-                    min={-10} max={10} step={0.1} 
-                  />
-                  <PropSlider 
-                    label="POS Z" 
-                    value={getControlValue('position', 2)}
-                    onChange={(v: number) => handleControlChange('position', v, 2)}
-                    isMode={selectedKeyframe?.id === selectedId}
-                    min={-10} max={10} step={0.1} 
-                  />
-                  
-                  {selectedObject.type !== 'audio' && (
-                    <>
-                      <Divider />
-                      <PropSlider 
-                        label="ROT X" 
-                        value={getControlValue('rotation', 0)}
-                        onChange={(v: number) => handleControlChange('rotation', v, 0)}
-                        isMode={selectedKeyframe?.id === selectedId}
-                        min={-180} max={180} step={1} 
-                      />
-                      <PropSlider 
-                        label="ROT Y" 
-                        value={getControlValue('rotation', 1)}
-                        onChange={(v: number) => handleControlChange('rotation', v, 1)}
-                        isMode={selectedKeyframe?.id === selectedId}
-                        min={-180} max={180} step={1} 
-                      />
-                      <PropSlider 
-                        label="ROT Z" 
-                        value={getControlValue('rotation', 2)}
-                        onChange={(v: number) => handleControlChange('rotation', v, 2)}
-                        isMode={selectedKeyframe?.id === selectedId}
-                        min={-180} max={180} step={1} 
-                      />
-                    </>
-                  )}
-
-                  {selectedObject.type !== 'camera' && selectedObject.type !== 'audio' && (
-                    <>
-                      <Divider />
-                       <div style={{ display: 'flex', alignItems: 'center', gap: DesignSystem.Space(2), padding: `0 ${DesignSystem.Space(1)}`, height: '16px' }}>
-                           <span style={{ ...DesignSystem.Type.Label.S, flex: 1, color: DesignSystem.Color.Base.Content[2] }}>SCALE</span>
-                           <button 
-                                onClick={() => setIsScaleLocked(!isScaleLocked)} 
-                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: isScaleLocked ? DesignSystem.Color.Accent.Surface[1] : DesignSystem.Color.Base.Content[3], padding: '4px' }}
-                                title={isScaleLocked ? "Unlock Scale Ratio" : "Lock Scale Ratio"}
-                           >
-                               {isScaleLocked ? <Lock size={14} weight="fill" /> : <LockOpen size={14} />}
-                           </button>
-                        </div>
-                      <PropSlider 
-                        label="SCALE X" 
-                        value={getControlValue('scale', 0)}
-                        onChange={(v: number) => handleControlChange('scale', v, 0)}
-                        isMode={selectedKeyframe?.id === selectedId}
-                        min={0} max={5} step={0.05} 
-                      />
-                      <PropSlider 
-                        label="SCALE Y" 
-                        value={getControlValue('scale', 1)}
-                        onChange={(v: number) => handleControlChange('scale', v, 1)}
-                        isMode={selectedKeyframe?.id === selectedId}
-                        min={0} max={5} step={0.05} 
-                      />
-                      <PropSlider 
-                        label="SCALE Z" 
-                        value={getControlValue('scale', 2)}
-                        onChange={(v: number) => handleControlChange('scale', v, 2)}
-                        isMode={selectedKeyframe?.id === selectedId}
-                        min={0} max={5} step={0.05} 
-                      />
-                    </>
-                  )}
-                  
-                  {selectedObject.type === 'camera' && (
-                     <div style={{ marginTop: '8px' }}>
-                        <Slider label="FOV" value={selectedObject.fov || 60} min={10} max={120} step={1} onChange={(v) => handleUpdateObject(selectedObject.id, { fov: v })} />
-                     </div>
-                  )}
-                </Group>
-                
-                {selectedObject.type !== 'camera' && selectedObject.type !== 'audio' && (
-                  <Group title="APPEARANCE" icon={<Eye weight="fill"/>}>
-                      <PropSlider 
-                        label="OPACITY" 
-                        value={getControlValue('opacity')}
-                        onChange={(v: number) => handleControlChange('opacity', v)}
-                        isMode={selectedKeyframe?.id === selectedId}
-                        min={0} max={1} step={0.01} 
-                      />
-                  </Group>
-                )}
-                
-                {(selectedObject.type === 'mesh' || selectedObject.type === 'svg') && (
-                    <Group title="MATERIAL" icon={<Palette />}>
-                       <Select label="PRESET" onChange={e => handlePresetChange(e.target.value)} value="">
-                          <option value="" disabled>Select a Preset...</option>
-                          {Object.entries(materialPresets).map(([key, value]) => (
-                            <option key={key} value={key}>{key.charAt(0).toUpperCase() + key.slice(1).replace(/([A-Z])/g, ' $1').trim()}</option>
-                          ))}
-                       </Select>
-
-                       <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                           <label style={{ ...DesignSystem.Type.Label.S, color: DesignSystem.Color.Base.Content[2] }}>COLOR</label>
-                           <div style={{ display: 'flex', gap: DesignSystem.Space(2), alignItems: 'center' }}>
-                                <div style={{ width: '32px', height: '32px', borderRadius: '8px', overflow: 'hidden', border: `1px solid ${DesignSystem.Color.Base.Border[2]}`, flexShrink: 0 }}>
-                                    <input 
-                                        type="color" 
-                                        value={getControlValue('color')} 
-                                        onChange={(e) => handleControlChange('color', e.target.value)} 
-                                        style={{ width: '150%', height: '150%', margin: '-25%', padding: 0, border: 'none', cursor: 'pointer' }} 
-                                    />
-                                </div>
-                                <Input type="text" value={getControlValue('color')} onChange={(e) => handleControlChange('color', e.target.value)} style={{ flex: 1 }} />
-                           </div>
-                       </div>
-                      <PropSlider 
-                        label="METALNESS" 
-                        value={getControlValue('metalness')}
-                        onChange={(v: number) => handleControlChange('metalness', v)}
-                        isMode={selectedKeyframe?.id === selectedId}
-                        min={0} max={1} step={0.01} 
-                      />
-                      <PropSlider 
-                        label="ROUGHNESS" 
-                        value={getControlValue('roughness')}
-                        onChange={(v: number) => handleControlChange('roughness', v)}
-                        isMode={selectedKeyframe?.id === selectedId}
-                        min={0} max={1} step={0.01} 
-                      />
-                       {selectedObject.type === 'svg' && (
-                         <>
-                           <PropSlider label="EXTRUSION" value={getControlValue('extrusion')} onChange={v => handleControlChange('extrusion', v)} min={0} max={10} step={0.01} isMode={selectedKeyframe?.id === selectedId} />
-                           <PropSlider label="PATH LENGTH" value={getControlValue('pathLength')} onChange={v => handleControlChange('pathLength', v)} min={0} max={1} step={0.01} isMode={selectedKeyframe?.id === selectedId} />
-                         </>
-                       )}
-                      <Divider />
-                      <PropSlider label="TRANSMISSION" value={getControlValue('transmission')} onChange={v => handleControlChange('transmission', v)} min={0} max={1} step={0.01} isMode={selectedKeyframe?.id === selectedId} />
-                      <AnimatePresence>
-                      {getControlValue('transmission') > 0 && (
-                        <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} style={{ overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: DesignSystem.Space(3) }}>
-                            <PropSlider label="IOR" value={getControlValue('ior')} onChange={v => handleControlChange('ior', v)} min={1} max={2.5} step={0.01} isMode={selectedKeyframe?.id === selectedId} />
-                            <PropSlider label="THICKNESS" value={getControlValue('thickness')} onChange={v => handleControlChange('thickness', v)} min={0} max={5} step={0.1} isMode={selectedKeyframe?.id === selectedId} />
-                        </motion.div>
-                      )}
-                      </AnimatePresence>
-                      <Divider />
-                      <PropSlider label="CLEARCOAT" value={getControlValue('clearcoat')} onChange={v => handleControlChange('clearcoat', v)} min={0} max={1} step={0.01} isMode={selectedKeyframe?.id === selectedId} />
-                      <AnimatePresence>
-                      {getControlValue('clearcoat') > 0 && (
-                          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} style={{ overflow: 'hidden' }}>
-                            <PropSlider label="ROUGHNESS" value={getControlValue('clearcoatRoughness')} onChange={v => handleControlChange('clearcoatRoughness', v)} min={0} max={1} step={0.01} isMode={selectedKeyframe?.id === selectedId} />
-                          </motion.div>
-                      )}
-                      </AnimatePresence>
-                    </Group>
-                )}
-
-                {(selectedObject.type === 'audio' || selectedObject.type === 'video') && (
-                    <Group title="AUDIO" icon={<SpeakerHigh />}>
-                        <PropSlider 
-                            label="VOLUME" 
-                            value={getControlValue('volume')}
-                            onChange={(v: number) => handleControlChange('volume', v)}
-                            isMode={selectedKeyframe?.id === selectedId}
-                            min={0} max={1} step={0.05} 
-                        />
-                    </Group>
-                )}
-
-                {(selectedObject.type === 'video' || selectedObject.type === 'plane') && (
-                    <Group title="DISTORTION" icon={<Cylinder />}>
-                        <PropSlider 
-                            label="CYLINDER WRAP" 
-                            value={getControlValue('curvature')}
-                            onChange={(v: number) => handleControlChange('curvature', v)}
-                            isMode={selectedKeyframe?.id === selectedId}
-                            min={-0.5} max={0.5} step={0.01} 
-                        />
-                    </Group>
-                )}
-
-                {selectedObject.type === 'video' && (
-                    <Group title="PLAYBACK" icon={<FilmStrip />}>
-                        <Toggle label="LOOP" value={selectedObject.loop ?? true} onChange={(v) => handleUpdateObject(selectedObject.id, { loop: v })} />
-                        <div style={{ ...DesignSystem.Type.Label.S, fontSize: '10px', color: DesignSystem.Color.Base.Content[3], padding: '4px', textAlign: 'center', background: DesignSystem.Color.Base.Surface[2], borderRadius: DesignSystem.Effect.Radius.S }}>
-                            Playback is controlled by the main timeline. Audio requires user interaction to start.
-                        </div>
-                    </Group>
-                )}
-
-                {(selectedObject.type === 'video' || selectedObject.type === 'plane') && (
-                    <Group title="EFFECTS">
-                      {selectedObject.type === 'video' && <div style={{ padding: DesignSystem.Space(2), background: 'rgba(91, 80, 255, 0.05)', borderRadius: DesignSystem.Effect.Radius.S, ...DesignSystem.Type.Label.S, color: DesignSystem.Color.Accent.Surface[1], display: 'flex', alignItems: 'center', gap: '6px' }}><VideoCamera weight="fill" /> Video Active</div>}
-                      <Toggle label="CHROMA KEY" value={selectedObject.chromaKey?.enabled || false} onChange={(v) => {
-                          const currentChromaKey = selectedObject.chromaKey || { enabled: false, color: '#00ff00', similarity: 0.1, smoothness: 0.1 };
-                          handleUpdateObject(selectedObject.id, { chromaKey: { ...currentChromaKey, enabled: v } });
-                      }} />
-                      <AnimatePresence>
-                        {selectedObject.chromaKey?.enabled && (
-                            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} style={{ display: 'flex', flexDirection: 'column', gap: DesignSystem.Space(2), overflow: 'hidden' }}>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                                    <label style={{ ...DesignSystem.Type.Label.S, color: DesignSystem.Color.Base.Content[2] }}>KEY COLOR</label>
-                                    <div style={{ display: 'flex', gap: DesignSystem.Space(2), alignItems: 'center' }}>
-                                            <div style={{ width: '32px', height: '32px', borderRadius: '8px', overflow: 'hidden', border: `1px solid ${DesignSystem.Color.Base.Border[2]}`, flexShrink: 0 }}>
-                                                <input 
-                                                    type="color" 
-                                                    value={selectedObject.chromaKey.color} 
-                                                    onChange={(e) => handleUpdateObject(selectedObject.id, { chromaKey: { ...selectedObject.chromaKey!, color: e.target.value } })}
-                                                    style={{ width: '150%', height: '150%', margin: '-25%', padding: 0, border: 'none', cursor: 'pointer' }} 
-                                                />
-                                            </div>
-                                            <Input type="text" value={selectedObject.chromaKey.color} onChange={(e) => handleUpdateObject(selectedObject.id, { chromaKey: { ...selectedObject.chromaKey!, color: e.target.value } })} style={{ flex: 1 }} />
-                                    </div>
-                                </div>
-                                <Slider label="THRESHOLD" value={selectedObject.chromaKey.similarity} min={0} max={1} step={0.01} onChange={(v) => handleUpdateObject(selectedObject.id, { chromaKey: { ...selectedObject.chromaKey!, similarity: v } })} />
-                                <Slider label="SMOOTH" value={selectedObject.chromaKey.smoothness} min={0} max={1} step={0.01} onChange={(v) => handleUpdateObject(selectedObject.id, { chromaKey: { ...selectedObject.chromaKey!, smoothness: v } })} />
-                            </motion.div>
-                        )}
-                      </AnimatePresence>
-                    </Group>
-                )}
-                
-                {selectedObject.type !== 'camera' && (
-                  <Group title="TRANSITIONS" icon={<ToggleLeft weight="fill"/>}>
-                      <TransitionControls title="INTRO" transition={selectedObject.introTransition} onUpdate={(t) => handleUpdateObject(selectedObject.id, { introTransition: t })} />
-                      <Divider />
-                      <TransitionControls title="OUTRO" transition={selectedObject.outroTransition} onUpdate={(t) => handleUpdateObject(selectedObject.id, { outroTransition: t })} />
-                  </Group>
-                )}
-                
-                <Divider />
-                <Button variant="ghost" onClick={() => handleRemoveObject(selectedObject.id)} disabled={selectedObject.type === 'camera'} style={{ color: selectedObject.type === 'camera' ? DesignSystem.Color.Base.Content[3] : DesignSystem.Color.Feedback.Error, width: '100%', opacity: selectedObject.type === 'camera' ? 0.5 : 0.7 }}>
-                    <Trash size={16} weight="bold" /> {selectedObject.type === 'camera' ? 'LOCKED' : 'DELETE'}
-                </Button>
-            </div>
-        ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: DesignSystem.Space(4) }}>
-                <Group title="SCENE" icon={<PaintBrush weight="fill"/>}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                        <label style={{ ...DesignSystem.Type.Label.S, color: DesignSystem.Color.Base.Content[2] }}>BACKGROUND COLOR</label>
-                        <div style={{ display: 'flex', gap: DesignSystem.Space(2), alignItems: 'center' }}>
-                            <div style={{ width: '32px', height: '32px', borderRadius: '8px', overflow: 'hidden', border: `1px solid ${DesignSystem.Color.Base.Border[2]}`, flexShrink: 0 }}>
-                                <input 
-                                    type="color" 
-                                    value={globalSettings.backgroundColor} 
-                                    onChange={(e) => setGlobalSettings(g => ({ ...g, backgroundColor: e.target.value }))}
-                                    style={{ width: '150%', height: '150%', margin: '-25%', padding: 0, border: 'none', cursor: 'pointer' }} 
-                                />
-                            </div>
-                            <Input type="text" value={globalSettings.backgroundColor} onChange={(e) => setGlobalSettings(g => ({ ...g, backgroundColor: e.target.value }))} style={{ flex: 1 }} />
-                        </div>
-                    </div>
-
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                        <label style={{ ...DesignSystem.Type.Label.S, color: DesignSystem.Color.Base.Content[2] }}>GROUND COLOR</label>
-                        <div style={{ display: 'flex', gap: DesignSystem.Space(2), alignItems: 'center' }}>
-                            <div style={{ width: '32px', height: '32px', borderRadius: '8px', overflow: 'hidden', border: `1px solid ${DesignSystem.Color.Base.Border[2]}`, flexShrink: 0 }}>
-                                <input 
-                                    type="color" 
-                                    value={globalSettings.groundColor} 
-                                    onChange={(e) => setGlobalSettings(g => ({ ...g, groundColor: e.target.value }))}
-                                    style={{ width: '150%', height: '150%', margin: '-25%', padding: 0, border: 'none', cursor: 'pointer' }} 
-                                />
-                            </div>
-                            <Input type="text" value={globalSettings.groundColor} onChange={(e) => setGlobalSettings(g => ({ ...g, groundColor: e.target.value }))} style={{ flex: 1 }} />
-                        </div>
-                    </div>
-                    
-                    <Toggle label="SHOW GRID" value={globalSettings.showGrid} onChange={(v) => setGlobalSettings(g => ({ ...g, showGrid: v }))} />
-                    <Toggle label="SHOW GROUND" value={globalSettings.showGround} onChange={(v) => setGlobalSettings(g => ({ ...g, showGround: v }))} />
-
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                        <span style={DesignSystem.Type.Label.S}>ACCENT COLOR</span>
-                        <div style={{ display: 'flex', gap: '8px' }}>
-                             <div style={{ position: 'relative', width: '100%' }}>
-                                <select 
-                                    value={accentColor} 
-                                    onChange={(e) => setAccentColor(e.target.value)} 
-                                    style={{ 
-                                        appearance: 'none', 
-                                        width: '100%', 
-                                        background: DesignSystem.Color.Base.Surface[3], 
-                                        border: 'none', 
-                                        padding: '8px 12px', 
-                                        color: DesignSystem.Color.Base.Content[1],
-                                        borderRadius: DesignSystem.Effect.Radius.S,
-                                        fontFamily: DesignSystem.Type.Label.S.fontFamily,
-                                        fontSize: '12px',
-                                        cursor: 'pointer'
-                                    }}
-                                >
-                                    {ACCENT_COLORS.map(c => (
-                                        <option key={c} value={c}>{c}</option>
-                                    ))}
-                                </select>
-                                <div style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', display: 'flex', gap: '4px' }}>
-                                    <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: accentColor }} />
-                                    <CaretDown size={14} color={DesignSystem.Color.Base.Content[3]} />
-                                </div>
-                             </div>
-                        </div>
-                    </div>
-                </Group>
-                <Group title="LIGHTING" icon={<Lightbulb weight="fill"/>}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: DesignSystem.Space(3)}}>
-                        {/* Ambient Light */}
-                        <div>
-                            <span style={{ ...DesignSystem.Type.Label.S, color: DesignSystem.Color.Base.Content[2], display: 'block', marginBottom: DesignSystem.Space(2) }}>AMBIENT LIGHT</span>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: DesignSystem.Space(2)}}>
-                                <Input label="COLOR" type="color" value={globalSettings.ambientLight.color} onChange={e => handleLightSettingChange('ambientLight', 'color', e.target.value)} />
-                                <Slider label="INTENSITY" value={globalSettings.ambientLight.intensity} min={0} max={2} step={0.01} onChange={v => handleLightSettingChange('ambientLight', 'intensity', v)} />
-                            </div>
-                        </div>
-                        <Divider />
-                        {/* Main Light */}
-                        <div>
-                            <span style={{ ...DesignSystem.Type.Label.S, color: DesignSystem.Color.Base.Content[2], display: 'block', marginBottom: DesignSystem.Space(2) }}>MAIN (DIRECTIONAL)</span>
-                             <div style={{ display: 'flex', flexDirection: 'column', gap: DesignSystem.Space(2)}}>
-                                <Input label="COLOR" type="color" value={globalSettings.mainLight.color} onChange={e => handleLightSettingChange('mainLight', 'color', e.target.value)} />
-                                <Slider label="INTENSITY" value={globalSettings.mainLight.intensity} min={0} max={5} step={0.1} onChange={v => handleLightSettingChange('mainLight', 'intensity', v)} />
-                                <Slider label="POS X" value={globalSettings.mainLight.position[0]} min={-20} max={20} step={0.5} onChange={v => handleLightSettingChange('mainLight', 'position', v, 0)} />
-                                <Slider label="POS Y" value={globalSettings.mainLight.position[1]} min={-20} max={20} step={0.5} onChange={v => handleLightSettingChange('mainLight', 'position', v, 1)} />
-                                <Slider label="POS Z" value={globalSettings.mainLight.position[2]} min={-20} max={20} step={0.5} onChange={v => handleLightSettingChange('mainLight', 'position', v, 2)} />
-                            </div>
-                        </div>
-                        <Divider />
-                        {/* Rim Light */}
-                         <div>
-                            <span style={{ ...DesignSystem.Type.Label.S, color: DesignSystem.Color.Base.Content[2], display: 'block', marginBottom: DesignSystem.Space(2) }}>RIM (SPOTLIGHT)</span>
-                             <div style={{ display: 'flex', flexDirection: 'column', gap: DesignSystem.Space(2)}}>
-                                <Toggle label="ENABLE RIM LIGHT" value={globalSettings.rimLight.enabled} onChange={v => handleLightSettingChange('rimLight', 'enabled', v)} />
-                                <AnimatePresence>
-                                {globalSettings.rimLight.enabled && (
-                                    <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} style={{ display: 'flex', flexDirection: 'column', gap: DesignSystem.Space(2), overflow: 'hidden', marginTop: DesignSystem.Space(2) }}>
-                                        <Input label="COLOR" type="color" value={globalSettings.rimLight.color} onChange={e => handleLightSettingChange('rimLight', 'color', e.target.value)} />
-                                        <Slider label="INTENSITY" value={globalSettings.rimLight.intensity} min={0} max={20} step={0.5} onChange={v => handleLightSettingChange('rimLight', 'intensity', v)} />
-                                        <Slider label="POS X" value={globalSettings.rimLight.position[0]} min={-20} max={20} step={0.5} onChange={v => handleLightSettingChange('rimLight', 'position', v, 0)} />
-                                        <Slider label="POS Y" value={globalSettings.rimLight.position[1]} min={-20} max={20} step={0.5} onChange={v => handleLightSettingChange('rimLight', 'position', v, 1)} />
-                                        <Slider label="POS Z" value={globalSettings.rimLight.position[2]} min={-20} max={20} step={0.5} onChange={v => handleLightSettingChange('rimLight', 'position', v, 2)} />
-                                    </motion.div>
-                                )}
-                                </AnimatePresence>
-                            </div>
-                        </div>
-                    </div>
-                </Group>
-                <Group title="EFFECTS" icon={<Sparkle weight="fill"/>}>
-                    <Toggle label="BLOOM" value={globalSettings.bloom.enabled} onChange={(v) => setGlobalSettings(g => ({ ...g, bloom: { ...g.bloom, enabled: v } }))} />
-                     <AnimatePresence>
-                        {globalSettings.bloom.enabled && (
-                             <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} style={{ display: 'flex', flexDirection: 'column', gap: DesignSystem.Space(2), overflow: 'hidden', marginTop: DesignSystem.Space(2) }}>
-                                 <Slider label="STRENGTH" value={globalSettings.bloom.strength} min={0} max={2} step={0.01} onChange={v => setGlobalSettings(g => ({ ...g, bloom: { ...g.bloom, strength: v } }))}/>
-                                 <Slider label="THRESHOLD" value={globalSettings.bloom.threshold} min={0} max={1} step={0.01} onChange={v => setGlobalSettings(g => ({ ...g, bloom: { ...g.bloom, threshold: v } }))}/>
-                                 <Slider label="RADIUS" value={globalSettings.bloom.radius} min={0} max={2} step={0.01} onChange={v => setGlobalSettings(g => ({ ...g, bloom: { ...g.bloom, radius: v } }))}/>
-                            </motion.div>
-                        )}
-                     </AnimatePresence>
-                     <Divider />
-                     <Toggle label="VIGNETTE" value={globalSettings.vignette.enabled} onChange={(v) => setGlobalSettings(g => ({ ...g, vignette: { ...g.vignette, enabled: v } }))} />
-                     <AnimatePresence>
-                        {globalSettings.vignette.enabled && (
-                             <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} style={{ display: 'flex', flexDirection: 'column', gap: DesignSystem.Space(2), overflow: 'hidden', marginTop: DesignSystem.Space(2) }}>
-                                <Slider label="OFFSET" value={globalSettings.vignette.offset} min={0} max={2} step={0.01} onChange={v => setGlobalSettings(g => ({ ...g, vignette: { ...g.vignette, offset: v } }))}/>
-                                <Slider label="DARKNESS" value={globalSettings.vignette.darkness} min={0} max={2} step={0.01} onChange={v => setGlobalSettings(g => ({ ...g, vignette: { ...g.vignette, darkness: v } }))}/>
-                            </motion.div>
-                        )}
-                     </AnimatePresence>
-                </Group>
-            </div>
-        )}
+        <PropertiesPanel
+            selectedObject={selectedObject}
+            selectedKeyframe={selectedKeyframe}
+            globalSettings={globalSettings}
+            accentColor={accentColor}
+            isScaleLocked={isScaleLocked}
+            getControlValue={getControlValue}
+            handleControlChange={handleControlChange}
+            handleUpdateObject={handleUpdateObject}
+            handleRemoveObject={handleRemoveObject}
+            handleKeyframePropertyChange={handleKeyframePropertyChange}
+            handleRemoveKeyframe={handleRemoveKeyframe}
+            handleLightSettingChange={handleLightSettingChange}
+            setGlobalSettings={setGlobalSettings}
+            setAccentColor={setAccentColor}
+            setIsScaleLocked={setIsScaleLocked}
+        />
       </Window>
 
       <Window 
@@ -1168,97 +508,18 @@ const App = () => {
           />
       </Window>
 
-      <motion.div drag dragMomentum={false} dragConstraints={containerRef} initial={{ y: 0, x: '-50%' }} style={{ position: 'absolute', bottom: '40px', left: '50%', height: '72px', background: DesignSystem.Color.Base.Surface['3b'], backdropFilter: 'blur(40px)', WebkitBackdropFilter: 'blur(40px)', borderRadius: '999px', border: `1px solid ${DesignSystem.Color.Base.Border[2]}`, padding: '0 24px', display: 'flex', alignItems: 'center', gap: '24px', boxShadow: '0 24px 48px -12px rgba(0,0,0,0.6)', zIndex: 200, touchAction: 'none' }} whileTap={{ cursor: 'grabbing' }}>
-         <div style={{ position: 'absolute', top: '-10px', left: '0', right: '0', height: '20px', display: 'flex', justifyContent: 'center' }}>
-             <div style={{ width: '40px', height: '4px', background: 'rgba(255,255,255,0.1)', borderRadius: '4px' }} />
-         </div>
-         <DockItem icon={<SquaresFour weight="fill" />} label="ASSETS" isActive={showAssets} onClick={() => setShowAssets(!showAssets)} />
-         <DockItem icon={<FilmStrip weight="fill" />} label="TIMELINE" isActive={showTimeline} onClick={() => setShowTimeline(!showTimeline)} />
-         <DockItem icon={<Faders weight="fill" />} label="PROPS" isActive={showProperties} onClick={() => setShowProperties(!showProperties)} />
-      </motion.div>
+      <Dock 
+        containerRef={containerRef}
+        showAssets={showAssets}
+        setShowAssets={setShowAssets}
+        showTimeline={showTimeline}
+        setShowTimeline={setShowTimeline}
+        showProperties={showProperties}
+        setShowProperties={setShowProperties}
+      />
     </div>
   );
 };
-
-const TransitionControls: React.FC<{
-    title: string;
-    transition: TransitionEffect;
-    onUpdate: (t: TransitionEffect) => void;
-}> = ({ title, transition, onUpdate }) => {
-    const isEnabled = transition.type === 'custom';
-    const [isOpen, setIsOpen] = useState(isEnabled);
-    
-    useEffect(() => {
-        if (isEnabled && !isOpen) setIsOpen(true);
-    }, [isEnabled]);
-
-    const update = (key: keyof TransitionEffect, value: any) => onUpdate({ ...transition, [key]: value });
-    const updateVec3 = (key: 'position' | 'rotation', index: number, value: number) => {
-        const vec = [...transition[key]] as [number, number, number];
-        vec[index] = value;
-        onUpdate({ ...transition, [key]: vec });
-    };
-
-    return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: DesignSystem.Space(2), background: isEnabled ? DesignSystem.Color.Base.Surface[2] : 'transparent', borderRadius: DesignSystem.Effect.Radius.S, padding: isEnabled ? '8px' : '0' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: `0 ${DesignSystem.Space(1)}` }}>
-                <Toggle 
-                    label={title} 
-                    value={isEnabled} 
-                    onChange={(v) => onUpdate({ ...transition, type: v ? 'custom' : 'none' })} 
-                />
-                 {isEnabled && (
-                    <motion.div 
-                        onClick={() => setIsOpen(!isOpen)}
-                        animate={{ rotate: isOpen ? 0 : -90 }}
-                        style={{ cursor: 'pointer', color: DesignSystem.Color.Base.Content[3] }}
-                    >
-                        <CaretDown size={14} weight="bold" />
-                    </motion.div>
-                )}
-            </div>
-            <AnimatePresence>
-                {isEnabled && isOpen && (
-                    <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} style={{ display: 'flex', flexDirection: 'column', gap: DesignSystem.Space(3), overflow: 'hidden', paddingTop: '4px' }}>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: DesignSystem.Space(2) }}>
-                            <Input label="DELAY" type="number" step="0.1" min="0" value={transition.delay} onChange={e => update('delay', parseFloat(e.target.value))} />
-                            <Input label="DURATION" type="number" step="0.1" min="0.1" value={transition.duration} onChange={e => update('duration', parseFloat(e.target.value))} />
-                        </div>
-                        <Select label="EASING" value={transition.easing} onChange={e => update('easing', e.target.value)}>
-                            <option value="power2.out">Default</option>
-                            <option value="back.in(1.7)">Pre-Bounce</option>
-                            <option value="back.out(1.7)">Post-Bounce</option>
-                            <option value="elastic.out(1, 0.75)">Elastic</option>
-                            <option value="power2.in">Ease In</option>
-                        </Select>
-                        <Divider />
-                        <Toggle label="FADE" value={transition.fade} onChange={v => update('fade', v)} />
-                        <Slider label="SCALE" value={transition.scale} min={0} max={2} step={0.1} onChange={v => update('scale', v)} />
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: DesignSystem.Space(2) }}>
-                            <Input label="POS X" type="number" step="0.1" value={transition.position[0]} onChange={e => updateVec3('position', 0, parseFloat(e.target.value))} />
-                            <Input label="POS Y" type="number" step="0.1" value={transition.position[1]} onChange={e => updateVec3('position', 1, parseFloat(e.target.value))} />
-                            <Input label="POS Z" type="number" step="0.1" value={transition.position[2]} onChange={e => updateVec3('position', 2, parseFloat(e.target.value))} />
-                        </div>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: DesignSystem.Space(2) }}>
-                            <Input label="ROT X" type="number" step="1" value={transition.rotation[0]} onChange={e => updateVec3('rotation', 0, parseFloat(e.target.value))} />
-                            <Input label="ROT Y" type="number" step="1" value={transition.rotation[1]} onChange={e => updateVec3('rotation', 1, parseFloat(e.target.value))} />
-                            <Input label="ROT Z" type="number" step="1" value={transition.rotation[2]} onChange={e => updateVec3('rotation', 2, parseFloat(e.target.value))} />
-                        </div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
-        </div>
-    );
-};
-
-const DockItem = ({ icon, label, isActive, onClick }: { icon: React.ReactNode, label: string, isActive: boolean, onClick: () => void }) => (
-    <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}>
-        <motion.button onClick={onClick} whileHover={{ scale: 1.1, y: -4 }} whileTap={{ scale: 0.96 }} style={{ width: '44px', height: '44px', borderRadius: '14px', border: isActive ? `1px solid ${DesignSystem.Color.Accent.Surface[1]}` : `1px solid transparent`, background: 'rgba(255,255,255,0.03)', color: isActive ? DesignSystem.Color.Accent.Content[1] : DesignSystem.Color.Base.Content[2], display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px', cursor: 'pointer', boxShadow: isActive ? `0 0 24px ${DesignSystem.Color.Accent.Surface[1]}` : 'none', transition: 'border 0.2s, background 0.2s, box-shadow 0.2s' }}>
-            {icon}
-        </motion.button>
-        {isActive && ( <motion.div layoutId="active-dot" style={{ position: 'absolute', bottom: '-8px', width: '3px', height: '3px', borderRadius: '50%', background: DesignSystem.Color.Accent.Surface[1], boxShadow: `0 0 8px ${DesignSystem.Color.Accent.Surface[1]}` }} /> )}
-    </div>
-);
 
 const root = createRoot(document.getElementById('root')!);
 root.render(<App />);
