@@ -181,6 +181,74 @@ const App = () => {
   
   const selectedObject = objects.find(o => o.id === selectedId);
 
+  // --- Prop Control Helpers ---
+
+  const getInterpolatedValueAtTime = (objData: SceneObject, property: string, localTime: number, mode: 'arrival' | 'departure') => {
+    const baseValue = objData[property as keyof SceneObject];
+    if (!objData.animations || objData.animations.length === 0) return baseValue;
+
+    const keyframes = [...objData.animations];
+    const baseState: TimelineKeyframe['values'] = {
+        position: objData.position, rotation: objData.rotation, scale: objData.scale,
+        metalness: objData.metalness, roughness: objData.roughness, opacity: objData.opacity, volume: objData.volume,
+        curvature: objData.curvature, transmission: objData.transmission, ior: objData.ior, thickness: objData.thickness,
+        clearcoat: objData.clearcoat, clearcoatRoughness: objData.clearcoatRoughness, extrusion: objData.extrusion,
+        pathLength: objData.pathLength,
+    };
+    const baseKeyframe: TimelineKeyframe = { time: 0, values: {}, easing: 'power2.out' };
+
+    let departureKf = baseKeyframe;
+    let arrivalKf: TimelineKeyframe | null = null;
+    for (const kf of keyframes) {
+        if (kf.time <= localTime) departureKf = kf;
+        else { arrivalKf = kf; break; }
+    }
+    if (!arrivalKf) arrivalKf = departureKf;
+
+    const departureValues = { ...baseState, ...departureKf.values };
+    const arrivalValues = { ...baseState, ...arrivalKf.values };
+    
+    const startVal = departureValues[property as keyof typeof departureValues];
+    const endVal = arrivalValues[property as keyof typeof arrivalValues];
+
+    if (startVal === undefined || endVal === undefined) return baseValue;
+
+    const duration = arrivalKf.time - departureKf.time;
+    const progress = duration > 0 ? (localTime - departureKf.time) / duration : 1;
+    
+    const easingSource = mode === 'arrival' ? arrivalKf : departureKf;
+    const ease = gsap.parseEase(easingSource.easing || 'power2.out');
+    const easedProgress = ease(progress);
+
+    return gsap.utils.interpolate(startVal, endVal, easedProgress);
+  }
+  
+  const getFullKeyframeValuesAtTime = (object: SceneObject, time: number): TimelineKeyframe['values'] => {
+    const values: Partial<TimelineKeyframe['values']> = {};
+    
+    // Define animatable properties per type for robust copying
+    const animatableProps: { [key in SceneObject['type']]?: (keyof TimelineKeyframe['values'])[] } = {
+        'mesh': ['position', 'rotation', 'scale', 'opacity', 'metalness', 'roughness', 'transmission', 'ior', 'thickness', 'clearcoat', 'clearcoatRoughness'],
+        'svg': ['position', 'rotation', 'scale', 'opacity', 'metalness', 'roughness', 'transmission', 'ior', 'thickness', 'clearcoat', 'clearcoatRoughness', 'extrusion', 'pathLength'],
+        'plane': ['position', 'rotation', 'scale', 'opacity', 'curvature'],
+        'video': ['position', 'rotation', 'scale', 'opacity', 'curvature', 'volume'],
+        'glb': ['position', 'rotation', 'scale', 'opacity'],
+        'audio': ['position', 'volume'],
+        'camera': ['position', 'rotation']
+    };
+
+    const propsForType = animatableProps[object.type] || [];
+    
+    propsForType.forEach(prop => {
+        const value = getInterpolatedValueAtTime(object, prop, time, 'arrival');
+        if (value !== undefined) {
+            (values as any)[prop] = value;
+        }
+    });
+    
+    return values;
+  };
+
   // --- Actions ---
   const handleTogglePlay = () => {
       engineRef.current?.resumeAudioContext();
@@ -230,42 +298,23 @@ const App = () => {
 
   const handleAddKeyframe = () => {
     if (!selectedId) return;
+
+    const objectToAddKf = objects.find(o => o.id === selectedId);
+    if (!objectToAddKf) return;
+    
+    const localTime = parseFloat((Math.max(0, currentTime - objectToAddKf.startTime)).toFixed(3));
+    const newValues = getFullKeyframeValuesAtTime(objectToAddKf, localTime);
+
     setObjects(prev => prev.map(o => {
       if (o.id !== selectedId) return o;
       
       const newAnimations = o.animations ? [...o.animations] : [];
-      // Explicitly round to prevent floating point misalignment
-      const time = parseFloat((Math.max(0, currentTime - o.startTime)).toFixed(3)); 
-
-      const newValues: TimelineKeyframe['values'] = {
-        position: [...o.position] as [number, number, number],
-        rotation: [...o.rotation] as [number, number, number],
-      };
+      const existingIndex = newAnimations.findIndex(kf => Math.abs(kf.time - localTime) < 0.01);
       
-      if (o.type !== 'camera') newValues.scale = [...o.scale] as [number, number, number];
-      if (o.type === 'mesh' || o.type === 'svg') {
-        newValues.metalness = o.metalness;
-        newValues.roughness = o.roughness;
-        newValues.transmission = o.transmission;
-        newValues.ior = o.ior;
-        newValues.thickness = o.thickness;
-        newValues.clearcoat = o.clearcoat;
-        newValues.clearcoatRoughness = o.clearcoatRoughness;
-        newValues.extrusion = o.extrusion;
-        if (o.type === 'svg') {
-          newValues.pathLength = o.pathLength;
-        }
-      }
-      if (o.type === 'audio' || o.type === 'video') newValues.volume = o.volume;
-
-      newValues.opacity = o.opacity;
-      newValues.curvature = o.curvature;
-
-      const existingIndex = newAnimations.findIndex(kf => Math.abs(kf.time - time) < 0.01);
       if (existingIndex !== -1) {
         newAnimations[existingIndex].values = { ...newAnimations[existingIndex].values, ...newValues };
       } else {
-        newAnimations.push({ time, values: newValues, easing: 'power2.out' });
+        newAnimations.push({ time: localTime, values: newValues, easing: 'power2.out' });
       }
       
       newAnimations.sort((a, b) => a.time - b.time);
@@ -298,30 +347,60 @@ const App = () => {
       }
     }
   };
-  
-  const handleCopyKeyframeAsYaml = async () => {
+
+  const handleCopySelectedKeyframeValuesAsYaml = async () => {
     if (!selectedKeyframe || !selectedObject) return;
+    
     const kf = selectedObject.animations[selectedKeyframe.index];
-    if (kf && kf.values) {
-        try {
-            const yamlString = yaml.dump(kf.values);
-            await navigator.clipboard.writeText(yamlString);
-            setCopiedKeyframeYaml(yamlString);
-        } catch (error) {
-            console.error('Failed to copy YAML:', error);
-            alert('Failed to copy keyframe as YAML.');
-        }
+    if (!kf) return;
+    
+    const localTime = kf.time;
+    const fullValues = getFullKeyframeValuesAtTime(selectedObject, localTime);
+
+    // Construct the full keyframe object for copying
+    const keyframeToCopy = {
+        time: kf.time,
+        name: kf.name,
+        easing: kf.easing,
+        values: fullValues,
+    };
+
+    // Clean object to remove undefined keys before dumping
+    const cleanedKeyframeToCopy = JSON.parse(JSON.stringify(keyframeToCopy));
+
+    try {
+        const yamlString = yaml.dump(cleanedKeyframeToCopy);
+        await navigator.clipboard.writeText(yamlString);
+        setCopiedKeyframeYaml(yamlString);
+    } catch (error) {
+        console.error('Failed to copy full keyframe values as YAML:', error);
+        alert('Failed to copy keyframe as YAML.');
     }
   };
   
-  const handlePasteKeyframeFromYaml = async () => {
+  const handlePasteValuesToSelectedKeyframeFromYaml = async () => {
     if (!selectedKeyframe || !selectedObject) return;
     try {
         const text = await navigator.clipboard.readText();
-        const parsedValues = yaml.load(text);
+        const parsedKeyframe = yaml.load(text) as any;
 
-        if (typeof parsedValues !== 'object' || parsedValues === null) {
-            throw new Error('Pasted content is not a valid object.');
+        if (typeof parsedKeyframe !== 'object' || parsedKeyframe === null || Array.isArray(parsedKeyframe)) {
+            throw new Error('Pasted content is not a valid keyframe object.');
+        }
+        
+        // Prepare updates, preserving the keyframe's original time.
+        const updates: Partial<TimelineKeyframe> = {};
+
+        // The pasted content could be a full keyframe object or just a values object.
+        // We prioritize pasting a full keyframe structure if it's present.
+        if ('values' in parsedKeyframe && typeof parsedKeyframe.values === 'object') {
+            // It's a full keyframe object.
+            updates.values = parsedKeyframe.values as TimelineKeyframe['values'];
+            if ('name' in parsedKeyframe) updates.name = parsedKeyframe.name as string;
+            if ('easing' in parsedKeyframe) updates.easing = parsedKeyframe.easing as string;
+        } else {
+            // Assume the entire pasted object is the 'values' block for backward compatibility.
+            updates.values = parsedKeyframe as TimelineKeyframe['values'];
         }
 
         setObjects(prev => prev.map(o => {
@@ -331,14 +410,61 @@ const App = () => {
             
             newAnims[selectedKeyframe.index] = {
                 ...newAnims[selectedKeyframe.index],
-                values: { ...newAnims[selectedKeyframe.index].values, ...parsedValues }
+                ...updates
             };
             
             return { ...o, animations: newAnims };
         }));
     } catch (error) {
         console.error('Failed to paste YAML:', error);
-        alert('Failed to paste keyframe. Please ensure valid YAML is in your clipboard.');
+        alert('Failed to paste keyframe. Clipboard must contain a valid YAML keyframe or values object.');
+    }
+  };
+  
+  const handleCopyAllKeyframesAsYaml = async (trackId: string) => {
+    const objectToCopy = objects.find(o => o.id === trackId);
+    if (!objectToCopy || !objectToCopy.animations) return;
+    
+    try {
+        const yamlString = yaml.dump(objectToCopy.animations);
+        await navigator.clipboard.writeText(yamlString);
+        setCopiedKeyframeYaml(yamlString);
+    } catch (error) {
+        console.error('Failed to copy all keyframes as YAML:', error);
+        alert('Failed to copy keyframes.');
+    }
+  };
+  
+  const handlePasteAllKeyframesFromYaml = async (trackId: string) => {
+    try {
+        const text = await navigator.clipboard.readText();
+        const parsedKeyframes = yaml.load(text);
+
+        if (!Array.isArray(parsedKeyframes)) {
+             throw new Error('Pasted content is not a valid keyframe array.');
+        }
+        
+        // Robust validation of the pasted structure
+        const isValidKeyframeArray = parsedKeyframes.every(kf => 
+            typeof kf === 'object' && kf !== null &&
+            typeof kf.time === 'number' &&
+            typeof kf.values === 'object' && kf.values !== null &&
+            (kf.name === undefined || kf.name === null || typeof kf.name === 'string') &&
+            (kf.easing === undefined || typeof kf.easing === 'string')
+        );
+
+        if (!isValidKeyframeArray) {
+            throw new Error('Pasted YAML is an array, but its items do not match the required keyframe structure.');
+        }
+
+        setObjects(prev => prev.map(o => {
+            if (o.id !== trackId) return o;
+            return { ...o, animations: parsedKeyframes as TimelineKeyframe[] };
+        }));
+
+    } catch (error) {
+        console.error('Failed to paste all keyframes from YAML:', error);
+        alert('Failed to paste keyframes. Clipboard must contain a valid YAML array of keyframes.');
     }
   };
   
@@ -403,48 +529,6 @@ const App = () => {
       else if (type.startsWith('audio/') || name.endsWith('.wav') || name.endsWith('.mp3') || name.endsWith('.ogg')) handleAddObject('audio', url);
       else if (name.endsWith('.glb') || name.endsWith('.gltf')) handleAddObject('glb', url);
   };
-  
-  // --- Prop Control Helpers ---
-
-  const getInterpolatedValueAtTime = (objData: SceneObject, property: string, localTime: number, mode: 'arrival' | 'departure') => {
-    const baseValue = objData[property as keyof SceneObject];
-    if (!objData.animations || objData.animations.length === 0) return baseValue;
-
-    const keyframes = [...objData.animations];
-    const baseState: TimelineKeyframe['values'] = {
-        position: objData.position, rotation: objData.rotation, scale: objData.scale,
-        metalness: objData.metalness, roughness: objData.roughness, opacity: objData.opacity, volume: objData.volume,
-        curvature: objData.curvature, transmission: objData.transmission, ior: objData.ior, thickness: objData.thickness,
-        clearcoat: objData.clearcoat, clearcoatRoughness: objData.clearcoatRoughness, extrusion: objData.extrusion,
-        pathLength: objData.pathLength,
-    };
-    const baseKeyframe: TimelineKeyframe = { time: 0, values: {}, easing: 'power2.out' };
-
-    let departureKf = baseKeyframe;
-    let arrivalKf: TimelineKeyframe | null = null;
-    for (const kf of keyframes) {
-        if (kf.time <= localTime) departureKf = kf;
-        else { arrivalKf = kf; break; }
-    }
-    if (!arrivalKf) arrivalKf = departureKf;
-
-    const departureValues = { ...baseState, ...departureKf.values };
-    const arrivalValues = { ...baseState, ...arrivalKf.values };
-    
-    const startVal = departureValues[property as keyof typeof departureValues];
-    const endVal = arrivalValues[property as keyof typeof arrivalValues];
-
-    if (startVal === undefined || endVal === undefined) return baseValue;
-
-    const duration = arrivalKf.time - departureKf.time;
-    const progress = duration > 0 ? (localTime - departureKf.time) / duration : 1;
-    
-    const easingSource = mode === 'arrival' ? arrivalKf : departureKf;
-    const ease = gsap.parseEase(easingSource.easing || 'power2.out');
-    const easedProgress = ease(progress);
-
-    return gsap.utils.interpolate(startVal, endVal, easedProgress);
-  }
   
   const getControlValue = (property: string, axis?: number) => {
     if (!selectedObject) return axis !== undefined ? 0 : (property.includes('scale') ? 1 : 0);
@@ -597,8 +681,8 @@ const App = () => {
         onResetScene={handleResetScene}
         selectedKeyframe={selectedKeyframe}
         copiedKeyframeYaml={copiedKeyframeYaml}
-        onCopyKeyframeAsYaml={handleCopyKeyframeAsYaml}
-        onPasteKeyframeFromYaml={handlePasteKeyframeFromYaml}
+        onCopyKeyframeAsYaml={handleCopySelectedKeyframeValuesAsYaml}
+        onPasteKeyframeFromYaml={handlePasteValuesToSelectedKeyframeFromYaml}
       >
         <PropertiesPanel
             selectedObject={selectedObject}
@@ -646,6 +730,9 @@ const App = () => {
             onSelectKeyframe={handleSelectKeyframe}
             onRemoveKeyframe={handleRemoveKeyframe}
             isSnappingEnabled={isSnappingEnabled}
+            onCopyAllKeyframesAsYaml={handleCopyAllKeyframesAsYaml}
+            onPasteAllKeyframesFromYaml={handlePasteAllKeyframesFromYaml}
+            copiedKeyframeYaml={copiedKeyframeYaml}
           />
       </Window>
 

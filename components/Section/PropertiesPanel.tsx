@@ -1,4 +1,5 @@
 
+
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -54,11 +55,12 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
       handleUpdateObject(selectedObject.id, materialPresets[presetKey]);
     };
 
-    const getSelectedKeyframeEasing = () => {
-        if (!selectedKeyframe || !selectedObject) return 'power2.out';
-        const kf = selectedObject.animations[selectedKeyframe.index];
-        return kf?.easing || 'power2.out';
+    const getSelectedKeyframeData = () => {
+        if (!selectedKeyframe || !selectedObject) return null;
+        return selectedObject.animations[selectedKeyframe.index];
     };
+    
+    const selectedKeyframeData = getSelectedKeyframeData();
 
     if (selectedObject) {
         return (
@@ -74,12 +76,18 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                 </div>
 
                 <AnimatePresence>
-                {selectedKeyframe?.id === selectedObject.id && (
+                {selectedKeyframe?.id === selectedObject.id && selectedKeyframeData && (
                     <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} style={{ overflow: 'hidden' }}>
                        <Group title="KEYFRAME" icon={<Diamond weight="fill" />}>
+                           <Input
+                                label="KEYFRAME NAME"
+                                placeholder="e.g. Start, Mid-point"
+                                value={selectedKeyframeData.name || ''}
+                                onChange={(e) => handleKeyframePropertyChange('name', e.target.value)}
+                           />
                            <Select
                                label="EASING"
-                               value={getSelectedKeyframeEasing()}
+                               value={selectedKeyframeData.easing || 'power2.out'}
                                onChange={(e) => handleKeyframePropertyChange('easing', e.target.value)}
                            >
                               {EASING_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}

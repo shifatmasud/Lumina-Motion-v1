@@ -1,6 +1,5 @@
 
 
-
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
@@ -14,6 +13,7 @@ import gsap from 'gsap';
 
 export interface TimelineKeyframe {
   time: number; // in seconds, relative to the clip's start
+  name?: string; // Optional user-defined name
   easing?: string; // for GSAP
   values: Partial<Pick<SceneObject, 'position' | 'rotation' | 'scale' | 'metalness' | 'roughness' | 'volume' | 'opacity' | 'curvature' | 'transmission' | 'ior' | 'thickness' | 'clearcoat' | 'clearcoatRoughness' | 'extrusion' | 'pathLength'>>;
 }

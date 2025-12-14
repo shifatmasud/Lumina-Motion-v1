@@ -1,4 +1,5 @@
 
+
 import yaml from 'js-yaml';
 import { GlobalSettings, SceneObject, TimelineKeyframe } from '../engine';
 
@@ -12,10 +13,11 @@ export const createYamlString = (settingsData: GlobalSettings, objectsData: Scen
   
   const scene = {
     projectName: "My Lumina Scene",
-    version: "1.3-humane-yaml",
+    version: "1.4-humane-yaml",
     exportedAt: new Date().toISOString(),
     settings: {
       backgroundColor: settingsData.backgroundColor,
+      aspectRatio: settingsData.aspectRatio,
       ground: { show: settingsData.showGround, color: settingsData.groundColor },
       grid: { show: settingsData.showGrid },
       lighting: {
@@ -27,6 +29,7 @@ export const createYamlString = (settingsData: GlobalSettings, objectsData: Scen
         bloom: settingsData.bloom,
         vignette: settingsData.vignette,
       },
+      performance: settingsData.performance,
     },
     timeline: objectsData.map(obj => {
       const {
@@ -61,8 +64,9 @@ export const createYamlString = (settingsData: GlobalSettings, objectsData: Scen
       objectYaml.camera_settings = buildCategory({ fov });
 
       if (animations && animations.length > 0) {
-        objectYaml.keyframes = animations.map(({ time, values, easing }) => ({
+        objectYaml.keyframes = animations.map(({ time, name, values, easing }) => ({
           time,
+          name,
           values: JSON.parse(JSON.stringify(values)), // clean undefined
           easing
         }));
@@ -82,8 +86,8 @@ export const createYamlString = (settingsData: GlobalSettings, objectsData: Scen
 #
 # --- STRUCTURE ---
 #
-# settings:       Global styles for the whole scene (background, lighting, effects).
-# timeline:       A list of all the objects (actors) in your scene.
+# settings:       Global styles (background, lighting, performance, aspect ratio).
+# timeline:       A list of all objects (actors) in your scene.
 #
 # --- OBJECTS (in timeline) ---
 #
@@ -94,7 +98,8 @@ export const createYamlString = (settingsData: GlobalSettings, objectsData: Scen
 # transform:      Its initial position, rotation, and scale.
 # appearance:     How it looks (color, opacity).
 # material:       Surface properties (metal, glass, plastic).
-# keyframes:      The animation script for this object over time.
+# keyframes:      The animation script. Each keyframe has a time, optional name,
+#                 easing type, and a 'values' block with the properties to animate.
 # transitions:    Special intro/outro effects.
 #
 # Enjoy creating!

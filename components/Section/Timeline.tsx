@@ -1,9 +1,10 @@
 
+
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, Reorder, AnimatePresence, useDragControls, useMotionValue, useTransform } from 'framer-motion';
 import { v4 as uuidv4 } from 'uuid';
-import { Play, Pause, Diamond, DotsSixVertical, DotsThreeVertical, Scissors, Copy, Trash, Camera as CameraIcon, ArrowCounterClockwise, SpeakerHigh, Cube, PencilSimple } from '@phosphor-icons/react';
+import { Play, Pause, Diamond, DotsSixVertical, DotsThreeVertical, Scissors, Copy, Trash, Camera as CameraIcon, ArrowCounterClockwise, SpeakerHigh, Cube, PencilSimple, ClipboardText } from '@phosphor-icons/react';
 import { DesignSystem } from '../../theme';
 import { SceneObject } from '../../engine';
 import { Button } from '../Core/Primitives';
@@ -23,6 +24,9 @@ interface TimelineProps {
   onSelectKeyframe: (id: string, index: number) => void;
   onRemoveKeyframe: () => void;
   isSnappingEnabled: boolean;
+  onCopyAllKeyframesAsYaml: (trackId: string) => void;
+  onPasteAllKeyframesFromYaml: (trackId: string) => void;
+  copiedKeyframeYaml: string | null;
 }
 
 const CONTEXT_MENU_Z_INDEX = 9999;
@@ -30,14 +34,19 @@ const SNAP_INTERVAL = 0.5; // Snap to 0.5s intervals
 
 const TrackContextMenu: React.FC<{
   rect: DOMRect;
-  isLocked?: boolean;
+  trackObject: SceneObject;
   onClose: () => void;
   onRemove: () => void;
   onSplit: () => void;
   onDuplicate: () => void;
   onRename: () => void;
   onResetCamera?: () => void;
-}> = ({ rect, isLocked, onClose, onRemove, onSplit, onDuplicate, onRename, onResetCamera }) => {
+  onCopyAllKeyframes: () => void;
+  onPasteAllKeyframes: () => void;
+  copiedKeyframeYaml: string | null;
+}> = ({ rect, trackObject, onClose, onRemove, onSplit, onDuplicate, onRename, onResetCamera, onCopyAllKeyframes, onPasteAllKeyframes, copiedKeyframeYaml }) => {
+  const isLocked = trackObject.type === 'camera';
+  
   const menuActions = [
       ...(onResetCamera ? [{ label: 'Reset Camera', icon: <ArrowCounterClockwise />, action: onResetCamera, danger: false, disabled: false }] : []),
       { label: 'Rename', icon: <PencilSimple />, action: onRename, disabled: false },
@@ -45,6 +54,14 @@ const TrackContextMenu: React.FC<{
       { label: 'Duplicate', icon: <Copy />, action: onDuplicate, disabled: isLocked },
       { label: 'Delete Track', icon: <Trash />, action: onRemove, danger: true, disabled: isLocked },
   ];
+  
+  const canCopy = trackObject.animations && trackObject.animations.length > 0;
+  const canPaste = copiedKeyframeYaml ? copiedKeyframeYaml.trim().startsWith('-') : false;
+
+  const keyframeActions = [
+      { label: 'Copy All Keyframes', icon: <Copy />, action: onCopyAllKeyframes, disabled: !canCopy },
+      { label: 'Paste Keyframes', icon: <ClipboardText />, action: onPasteAllKeyframes, disabled: !canPaste }
+  ]
 
   return createPortal(
     <>
@@ -61,7 +78,7 @@ const TrackContextMenu: React.FC<{
           position: 'fixed',
           top: rect.bottom + 4,
           left: rect.left,
-          width: '180px',
+          width: '200px',
           background: DesignSystem.Color.Base.Surface[3],
           border: `1px solid ${DesignSystem.Color.Base.Border[2]}`,
           borderRadius: DesignSystem.Effect.Radius.M,
@@ -98,6 +115,32 @@ const TrackContextMenu: React.FC<{
                 {item.icon} {item.label}
             </div>
         ))}
+        <div style={{height: '1px', background: DesignSystem.Color.Base.Border[1], margin: '4px 6px'}} />
+        {keyframeActions.map((item, i) => (
+            <div key={`kf-${i}`} 
+                onClick={() => { if (!item.disabled && item.action) { item.action(); onClose(); } }}
+                style={{ 
+                    padding: '8px 12px', 
+                    ...DesignSystem.Type.Label.S, 
+                    color: item.disabled ? DesignSystem.Color.Base.Content[3] : DesignSystem.Color.Base.Content[1],
+                    cursor: item.disabled ? 'not-allowed' : 'pointer',
+                    borderRadius: DesignSystem.Effect.Radius.S,
+                    transition: '0.1s',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    opacity: item.disabled ? 0.5 : 1
+                }}
+                onMouseEnter={(e) => {
+                  if (!item.disabled) e.currentTarget.style.background = DesignSystem.Color.Base.Surface[2];
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'transparent';
+                }}
+            >
+                {item.icon} {item.label}
+            </div>
+        ))}
       </motion.div>
     </>,
     document.body
@@ -116,7 +159,10 @@ const TimelineItem: React.FC<{
     selectedKeyframe: { id: string, index: number } | null;
     onSelectKeyframe: (id: string, index: number) => void;
     isSnappingEnabled: boolean;
-}> = ({ obj, isSelected, pixelsPerSecond, onClick, onRemove, onSplit, onDuplicate, onUpdateObject, selectedKeyframe, onSelectKeyframe, isSnappingEnabled }) => {
+    onCopyAllKeyframesAsYaml: (trackId: string) => void;
+    onPasteAllKeyframesFromYaml: (trackId: string) => void;
+    copiedKeyframeYaml: string | null;
+}> = ({ obj, isSelected, pixelsPerSecond, onClick, onRemove, onSplit, onDuplicate, onUpdateObject, selectedKeyframe, onSelectKeyframe, isSnappingEnabled, onCopyAllKeyframesAsYaml, onPasteAllKeyframesFromYaml, copiedKeyframeYaml }) => {
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const [showMenu, setShowMenu] = useState(false);
   const [menuRect, setMenuRect] = useState<DOMRect | null>(null);
@@ -363,6 +409,7 @@ const TimelineItem: React.FC<{
                     <div
                       key={`${obj.id}-${index}-${kf.time}`}
                       onClick={(e) => { e.stopPropagation(); onSelectKeyframe(obj.id, index); }}
+                      title={kf.name || `Keyframe at ${kf.time.toFixed(2)}s`}
                       style={{
                         position: 'absolute',
                         left: `${kf.time * pixelsPerSecond}px`,
@@ -399,13 +446,16 @@ const TimelineItem: React.FC<{
           {showMenu && menuRect && (
               <TrackContextMenu 
                   rect={menuRect} 
-                  isLocked={isLocked}
+                  trackObject={obj}
                   onClose={() => setShowMenu(false)} 
                   onRemove={() => onRemove(obj.id)} 
                   onSplit={() => onSplit(obj.id)} 
                   onDuplicate={() => onDuplicate(obj.id)}
                   onRename={startRenaming}
                   onResetCamera={obj.type === 'camera' ? handleResetCamera : undefined}
+                  onCopyAllKeyframes={() => onCopyAllKeyframesAsYaml(obj.id)}
+                  onPasteAllKeyframes={() => onPasteAllKeyframesFromYaml(obj.id)}
+                  copiedKeyframeYaml={copiedKeyframeYaml}
               />
           )}
       </AnimatePresence>
@@ -416,7 +466,8 @@ const TimelineItem: React.FC<{
 export const TimelineSequencer: React.FC<TimelineProps> = ({ 
     objects, setObjects, selectedId, onSelect, isPlaying, onTogglePlay,
     currentTime, setCurrentTime, totalDuration, onAddKeyframe, selectedKeyframe, 
-    onSelectKeyframe, onRemoveKeyframe, isSnappingEnabled
+    onSelectKeyframe, onRemoveKeyframe, isSnappingEnabled,
+    onCopyAllKeyframesAsYaml, onPasteAllKeyframesFromYaml, copiedKeyframeYaml
 }) => {
   const pixelsPerSecond = 100;
   const trackHeaderWidth = 160;
@@ -700,6 +751,9 @@ export const TimelineSequencer: React.FC<TimelineProps> = ({
                                 selectedKeyframe={selectedKeyframe}
                                 onSelectKeyframe={onSelectKeyframe}
                                 isSnappingEnabled={isSnappingEnabled}
+                                onCopyAllKeyframesAsYaml={onCopyAllKeyframesAsYaml}
+                                onPasteAllKeyframesFromYaml={onPasteAllKeyframesFromYaml}
+                                copiedKeyframeYaml={copiedKeyframeYaml}
                             />
                         ))}
                     </Reorder.Group>
