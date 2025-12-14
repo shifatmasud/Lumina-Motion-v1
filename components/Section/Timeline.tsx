@@ -1,12 +1,11 @@
-
-
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, Reorder, AnimatePresence, useDragControls, useMotionValue, useTransform } from 'framer-motion';
 import { v4 as uuidv4 } from 'uuid';
-import { Play, Pause, Diamond, DotsSixVertical, DotsThreeVertical, Scissors, Copy, Trash, Camera as CameraIcon, ArrowCounterClockwise, SpeakerHigh, Cube, PencilSimple, ClipboardText } from '@phosphor-icons/react';
+import gsap from 'gsap';
+import { Play, Pause, Diamond, DotsSixVertical, DotsThreeVertical, Scissors, Copy, Trash, Camera as CameraIcon, ArrowCounterClockwise, SpeakerHigh, Cube, PencilSimple, ClipboardText, MagicWand, Lightbulb, WaveSine } from '@phosphor-icons/react';
 import { DesignSystem } from '../../theme';
-import { SceneObject } from '../../engine';
+import { SceneObject, TimelineKeyframe } from '../../engine';
 import { Button } from '../Core/Primitives';
 
 interface TimelineProps {
@@ -32,6 +31,74 @@ interface TimelineProps {
 const CONTEXT_MENU_Z_INDEX = 9999;
 const SNAP_INTERVAL = 0.5; // Snap to 0.5s intervals
 
+const EasingGraph: React.FC<{
+    animations: TimelineKeyframe[];
+    pixelsPerSecond: number;
+    height: number;
+}> = ({ animations, pixelsPerSecond, height }) => {
+    if (animations.length < 1) return null;
+    const padding = 4;
+
+    const generatePathData = (startTime: number, arrivalKf: TimelineKeyframe) => {
+        const ease = gsap.parseEase(arrivalKf.easing || 'power2.out');
+        const duration = arrivalKf.time - startTime;
+        if (duration <= 0) return '';
+        
+        const width = duration * pixelsPerSecond;
+        const graphHeight = height - padding * 2;
+        const points: string[] = [];
+        const samples = Math.max(2, Math.floor(width / 5));
+
+        for (let i = 0; i <= samples; i++) {
+            const progress = i / samples;
+            const easedProgress = ease(progress);
+            const x = progress * width;
+            const y = (height - padding) - (easedProgress * graphHeight);
+            points.push(`${x.toFixed(2)},${y.toFixed(2)}`);
+        }
+        return `M ${points.join(' L ')}`;
+    };
+
+    const startTimes = [0, ...animations.map(kf => kf.time)];
+    
+    return (
+        <div style={{ 
+            position: 'absolute', 
+            inset: '6px 0', 
+            pointerEvents: 'none', 
+            overflow: 'hidden',
+            background: 'transparent',
+            borderRadius: '4px'
+        }}>
+            {animations.map((kf, i) => {
+                const startTime = startTimes[i];
+                const pathData = generatePathData(startTime, kf);
+                const left = startTime * pixelsPerSecond;
+                const width = (kf.time - startTime) * pixelsPerSecond;
+                if (width <= 0) return null;
+                
+                return (
+                    <svg
+                        key={i}
+                        width={width}
+                        height={height}
+                        style={{ position: 'absolute', left, top: '-6px', overflow: 'visible' }}
+                    >
+                        <path
+                            d={pathData}
+                            fill="none"
+                            stroke="var(--accent-surface)"
+                            strokeWidth="2"
+                            strokeOpacity={0.8}
+                            strokeLinecap="round"
+                        />
+                    </svg>
+                );
+            })}
+        </div>
+    );
+};
+
 const TrackContextMenu: React.FC<{
   rect: DOMRect;
   trackObject: SceneObject;
@@ -45,7 +112,7 @@ const TrackContextMenu: React.FC<{
   onPasteAllKeyframes: () => void;
   copiedKeyframeYaml: string | null;
 }> = ({ rect, trackObject, onClose, onRemove, onSplit, onDuplicate, onRename, onResetCamera, onCopyAllKeyframes, onPasteAllKeyframes, copiedKeyframeYaml }) => {
-  const isLocked = trackObject.type === 'camera';
+  const isLocked = trackObject.type === 'camera' || trackObject.type === 'light';
   
   const menuActions = [
       ...(onResetCamera ? [{ label: 'Reset Camera', icon: <ArrowCounterClockwise />, action: onResetCamera, danger: false, disabled: false }] : []),
@@ -170,7 +237,7 @@ const TimelineItem: React.FC<{
   const [isEditingName, setIsEditingName] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const isLocked = obj.type === 'camera';
+  const isLocked = obj.type === 'camera' || obj.type === 'light';
 
   const handleMenuClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -207,6 +274,8 @@ const TimelineItem: React.FC<{
           case 'camera': return <CameraIcon weight="fill"/>;
           case 'audio': return <SpeakerHigh weight="fill"/>;
           case 'glb': return <Cube weight="fill"/>;
+          case 'lottie': return <MagicWand weight="fill" />;
+          case 'light': return <Lightbulb weight="fill" />;
           default: return null;
       }
   };
@@ -215,11 +284,11 @@ const TimelineItem: React.FC<{
     <Reorder.Item 
         value={obj} 
         id={obj.id}
-        style={{ listStyle: 'none', position: 'relative', height: '48px', width: '100%' }}
+        style={{ listStyle: 'none', position: 'relative', width: '100%', height: '48px' }}
         dragListener={false}
         dragControls={dragControls}
     >
-      <div style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, display: 'flex' }}>
+      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '100%', display: 'flex' }}>
         {/* Track Header (Sticky) */}
         <div
           onClick={onClick}
@@ -301,7 +370,7 @@ const TimelineItem: React.FC<{
                      )}
                      {!isEditingName && (
                         <span style={{ fontSize: '9px', fontFamily: DesignSystem.Type.Label.S.fontFamily, color: DesignSystem.Color.Base.Content[3] }}>
-                            {obj.id === 'camera-main' ? 'LOCKED' : `CH ${obj.id.slice(0, 3)}`}
+                            {obj.id === 'camera-main' || obj.type === 'light' ? 'LOCKED' : `CH ${obj.id.slice(0, 3)}`}
                         </span>
                      )}
                 </div>
@@ -342,17 +411,27 @@ const TimelineItem: React.FC<{
                     top: '6px',
                     bottom: '6px',
                     width: `${obj.duration * pixelsPerSecond}px`,
-                    background: isLocked ? 'rgba(255, 255, 255, 0.05)' : (isSelected ? DesignSystem.Color.Accent.Surface[2] : DesignSystem.Color.Base.Surface[3]),
+                    background: isLocked 
+                        ? 'rgba(255, 255, 255, 0.04)' 
+                        : (isSelected 
+                            ? 'rgba(255, 255, 255, 0.1)' 
+                            : 'rgba(255, 255, 255, 0.06)'),
                     borderRadius: '6px',
                     border: `1px solid ${isSelected ? DesignSystem.Color.Accent.Content[2] : DesignSystem.Color.Base.Border[2]}`,
                     cursor: isLocked ? 'default' : 'grab',
                     overflow: 'visible', // Allow handles to be visible
                     boxShadow: isSelected ? DesignSystem.Effect.Shadow.Glow : 'none',
-                    zIndex: 1
+                    zIndex: 1,
+                    transition: 'background 0.2s ease-in-out'
                 }}
-                whileHover={{ filter: 'brightness(1.1)' }}
+                whileHover={{ filter: 'brightness(1.2)' }}
                 whileDrag={{ cursor: 'grabbing', zIndex: 2, boxShadow: DesignSystem.Effect.Shadow.Depth }}
             >
+                 <EasingGraph 
+                    animations={obj.animations} 
+                    pixelsPerSecond={pixelsPerSecond} 
+                    height={34} 
+                 />
                 {/* Trim Handles */}
                 {!isLocked && (
                     <>
@@ -636,18 +715,18 @@ export const TimelineSequencer: React.FC<TimelineProps> = ({
         >
             <div style={{ minWidth: `${totalWidth}px`, height: '100%', display: 'flex', flexDirection: 'column', position: 'relative' }}>
                 
-                {/* Sticky Ruler & Playhead Container */}
+                {/* Sticky Ruler Container */}
                 <div 
                     ref={rulerRef}
                     onPointerDown={onScrubberPointerDown}
                     style={{ 
                         position: 'sticky', 
                         top: 0, 
-                        height: '40px', /* Increased height for better interaction */
+                        height: '48px',
                         background: DesignSystem.Color.Base.Surface[2], 
                         borderBottom: `1px solid ${DesignSystem.Color.Base.Border[1]}`, 
                         display: 'flex', 
-                        zIndex: 30, // Higher than tracks
+                        zIndex: 30,
                         width: '100%',
                         cursor: 'ew-resize',
                         touchAction: 'none' 
@@ -676,51 +755,50 @@ export const TimelineSequencer: React.FC<TimelineProps> = ({
                     <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
                          {renderRulerTicks()}
                     </div>
-
-                    {/* PLAYHEAD (Fixed in Ruler) */}
-                    <motion.div
-                        style={{
-                            position: 'absolute',
-                            left: `calc(${trackHeaderWidth}px - 12px)`,
-                            top: 0,
-                            bottom: 0,
-                            x: playheadX,
-                            width: '24px',
-                            zIndex: 50,
-                            overflow: 'visible',
-                            pointerEvents: 'none',
-                        }}
-                    >
-                        {/* Line */}
-                        <div style={{
-                            position: 'absolute',
-                            left: '12px',
-                            top: '32px',
-                            width: '1px',
-                            height: '9999px',
-                            background: DesignSystem.Color.Accent.Surface[1],
-                            boxShadow: `0 0 4px ${DesignSystem.Color.Accent.Surface[1]}`,
-                            opacity: 0.8
-                        }} />
-
-                        {/* Diamond Handle */}
-                        <div style={{
-                            position: 'absolute',
-                            top: '15px',
-                            left: '7px',
-                            width: '10px',
-                            height: '10px',
-                            transform: 'rotate(45deg)',
-                            background: DesignSystem.Color.Accent.Surface[1],
-                            borderRadius: '2px',
-                            border: `1px solid ${DesignSystem.Color.Base.Surface[1]}`,
-                            boxShadow: '0 2px 4px rgba(0,0,0,0.5)'
-                        }} />
-                    </motion.div>
                 </div>
 
+                {/* PLAYHEAD */}
+                <motion.div
+                    style={{
+                        position: 'absolute',
+                        left: `calc(${trackHeaderWidth}px - 12px)`,
+                        top: '48px', // Start below the ruler
+                        bottom: 0,
+                        x: playheadX,
+                        width: '24px',
+                        zIndex: 50,
+                        pointerEvents: 'none',
+                    }}
+                >
+                    {/* Line */}
+                    <div style={{
+                        position: 'absolute',
+                        left: '12px',
+                        top: 0,
+                        width: '1px',
+                        height: '100%', // Span the track area
+                        background: DesignSystem.Color.Accent.Surface[1],
+                        boxShadow: `0 0 4px ${DesignSystem.Color.Accent.Surface[1]}`,
+                        opacity: 0.8
+                    }} />
+
+                    {/* Diamond Handle (Positioned relative to its parent, moving up into the ruler) */}
+                    <div style={{
+                        position: 'absolute',
+                        top: '-29px',
+                        left: '7px',
+                        width: '10px',
+                        height: '10px',
+                        transform: 'rotate(45deg)',
+                        background: DesignSystem.Color.Accent.Surface[1],
+                        borderRadius: '2px',
+                        border: `1px solid ${DesignSystem.Color.Base.Surface[1]}`,
+                        boxShadow: '0 2px 4px rgba(0,0,0,0.5)'
+                    }} />
+                </motion.div>
+
                 {/* Tracks Area */}
-                <div style={{ position: 'relative', flex: 1 }}>
+                <div style={{ position: 'relative', flex: 1, minHeight: '150px' }}>
                     {/* Background Grid */}
                     <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', paddingLeft: `${trackHeaderWidth}px` }}>
                          {Array.from({ length: totalDuration + 1 }).map((_, i) => (

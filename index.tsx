@@ -1,10 +1,9 @@
-
-
 import React, { useState, useEffect, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import { v4 as uuidv4 } from 'uuid';
 import gsap from 'gsap';
 import yaml from 'js-yaml';
+import JSZip from 'jszip';
 
 import { DesignSystem } from './theme';
 import { Engine, SceneObject, GlobalSettings, TimelineKeyframe } from './engine';
@@ -44,8 +43,7 @@ const App = () => {
   const [currentTime, setCurrentTime] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isSnappingEnabled, setIsSnappingEnabled] = useState(true);
-  const [easingMode, setEasingMode] = useState<'arrival' | 'departure'>('arrival');
-
+  
   // Window Visibility States
   const [showAssets, setShowAssets] = useState(false);
   const [showTimeline, setShowTimeline] = useState(true);
@@ -123,11 +121,10 @@ const App = () => {
     document.documentElement.style.setProperty('--accent-surface', accentColor);
     document.documentElement.style.setProperty('--accent-surface-dim', adjustColor(accentColor, -40));
     document.documentElement.style.setProperty('--accent-glow', `${accentColor}66`); // 40% opacity
-    setGlobalSettings(prev => ({ 
-      ...prev, 
-      accentColor,
-      rimLight: { ...prev.rimLight, color: accentColor } 
-    }));
+    setGlobalSettings(prev => ({ ...prev, accentColor }));
+    setObjects(prev => prev.map(o => 
+      o.id === 'rim-light' ? { ...o, color: accentColor } : o
+    ));
   }, [accentColor]);
 
   // Engine Init & Sync
@@ -146,10 +143,10 @@ const App = () => {
   useEffect(() => {
     if (engineRef.current) {
       const timeHasChanged = prevTimeRef.current !== currentTime;
-      engineRef.current.setTime(currentTime, objects, isPlaying, timeHasChanged, easingMode);
+      engineRef.current.setTime(currentTime, objects, isPlaying, timeHasChanged);
       prevTimeRef.current = currentTime;
     }
-  }, [currentTime, objects, isPlaying, easingMode]);
+  }, [currentTime, objects, isPlaying]);
 
   useEffect(() => {
     if (engineRef.current) engineRef.current.updateGlobalSettings(globalSettings);
@@ -212,7 +209,7 @@ const App = () => {
 
   // --- Prop Control Helpers ---
 
-  const getInterpolatedValueAtTime = (objData: SceneObject, property: string, localTime: number, mode: 'arrival' | 'departure') => {
+  const getInterpolatedValueAtTime = (objData: SceneObject, property: string, localTime: number) => {
     const baseValue = objData[property as keyof SceneObject];
     if (!objData.animations || objData.animations.length === 0) return baseValue;
 
@@ -222,9 +219,9 @@ const App = () => {
         metalness: objData.metalness, roughness: objData.roughness, opacity: objData.opacity, volume: objData.volume,
         curvature: objData.curvature, transmission: objData.transmission, ior: objData.ior, thickness: objData.thickness,
         clearcoat: objData.clearcoat, clearcoatRoughness: objData.clearcoatRoughness, extrusion: objData.extrusion,
-        pathLength: objData.pathLength,
+        pathLength: objData.pathLength, color: objData.color, intensity: objData.intensity,
     };
-    const baseKeyframe: TimelineKeyframe = { time: 0, values: {}, easing: 'power2.out' };
+    const baseKeyframe: TimelineKeyframe = { time: 0, values: {}, easing: 'none' };
 
     let departureKf = baseKeyframe;
     let arrivalKf: TimelineKeyframe | null = null;
@@ -245,9 +242,13 @@ const App = () => {
     const duration = arrivalKf.time - departureKf.time;
     const progress = duration > 0 ? (localTime - departureKf.time) / duration : 1;
     
-    const easingSource = mode === 'arrival' ? arrivalKf : departureKf;
-    const ease = gsap.parseEase(easingSource.easing || 'power2.out');
+    const ease = gsap.parseEase(arrivalKf.easing || 'none');
     const easedProgress = ease(progress);
+
+    // Color interpolation needs special handling in GSAP
+    if (property === 'color' && typeof startVal === 'string' && typeof endVal === 'string') {
+        return gsap.utils.interpolate(startVal, endVal)(easedProgress);
+    }
 
     return gsap.utils.interpolate(startVal, endVal, easedProgress);
   }
@@ -257,19 +258,21 @@ const App = () => {
     
     // Define animatable properties per type for robust copying
     const animatableProps: { [key in SceneObject['type']]?: (keyof TimelineKeyframe['values'])[] } = {
-        'mesh': ['position', 'rotation', 'scale', 'opacity', 'metalness', 'roughness', 'transmission', 'ior', 'thickness', 'clearcoat', 'clearcoatRoughness'],
-        'svg': ['position', 'rotation', 'scale', 'opacity', 'metalness', 'roughness', 'transmission', 'ior', 'thickness', 'clearcoat', 'clearcoatRoughness', 'extrusion', 'pathLength'],
+        'mesh': ['position', 'rotation', 'scale', 'opacity', 'metalness', 'roughness', 'transmission', 'ior', 'thickness', 'clearcoat', 'clearcoatRoughness', 'color'],
+        'svg': ['position', 'rotation', 'scale', 'opacity', 'metalness', 'roughness', 'transmission', 'ior', 'thickness', 'clearcoat', 'clearcoatRoughness', 'extrusion', 'pathLength', 'color'],
         'plane': ['position', 'rotation', 'scale', 'opacity', 'curvature'],
+        'lottie': ['position', 'rotation', 'scale', 'opacity'],
         'video': ['position', 'rotation', 'scale', 'opacity', 'curvature', 'volume'],
         'glb': ['position', 'rotation', 'scale', 'opacity'],
         'audio': ['position', 'volume'],
-        'camera': ['position', 'rotation']
+        'camera': ['position', 'rotation'],
+        'light': ['position', 'rotation', 'color', 'intensity']
     };
 
     const propsForType = animatableProps[object.type] || [];
     
     propsForType.forEach(prop => {
-        const value = getInterpolatedValueAtTime(object, prop, time, 'arrival');
+        const value = getInterpolatedValueAtTime(object, prop, time);
         if (value !== undefined) {
             (values as any)[prop] = value;
         }
@@ -287,7 +290,7 @@ const App = () => {
   const handleAddObject = (type: SceneObject['type'], url?: string, width?: number, height?: number) => {
     const defaultNameMap = {
         mesh: 'Cube', camera: 'Camera', audio: 'Audio', video: 'Video',
-        glb: 'Model', plane: 'Image', svg: 'SVG Shape'
+        glb: 'Model', plane: 'Image', svg: 'SVG Shape', lottie: 'Animation', light: 'Light'
     };
     const defaultName = defaultNameMap[type] || 'Object';
     
@@ -305,7 +308,7 @@ const App = () => {
       curvature: 0,
       volume: type === 'audio' || type === 'video' ? 1.0 : undefined,
       chromaKey: type === 'video' ? { enabled: false, color: '#00ff00', similarity: 0.1, smoothness: 0.1 } : undefined,
-      loop: type === 'video' ? true : undefined,
+      loop: (type === 'video' || type === 'lottie') ? true : undefined,
       startTime: Math.floor(currentTime), duration: 5, animations: [],
       introTransition: { ...defaultTransition },
       outroTransition: { ...defaultTransition },
@@ -320,7 +323,7 @@ const App = () => {
   };
 
   const handleRemoveObject = (id: string) => {
-      if (id === 'camera-main') return;
+      if (id === 'camera-main' || id === 'main-light' || id === 'rim-light') return;
       setObjects(prev => prev.filter(o => o.id !== id));
       if (selectedId === id) setSelectedId(null);
   };
@@ -343,7 +346,7 @@ const App = () => {
       if (existingIndex !== -1) {
         newAnimations[existingIndex].values = { ...newAnimations[existingIndex].values, ...newValues };
       } else {
-        newAnimations.push({ time: localTime, values: newValues, easing: 'power2.out' });
+        newAnimations.push({ time: localTime, values: newValues, easing: 'none' });
       }
       
       newAnimations.sort((a, b) => a.time - b.time);
@@ -526,6 +529,45 @@ const App = () => {
     }
   };
 
+  const processLottieFile = async (file: File) => {
+    const zip = new JSZip();
+    try {
+      const content = await zip.loadAsync(file);
+      const manifestFile = content.file('manifest.json');
+      if (!manifestFile) {
+          console.error('manifest.json not found in .lottie file');
+          return;
+      }
+      const manifestStr = await manifestFile.async('string');
+      const manifest = JSON.parse(manifestStr);
+      const animationId = manifest.animations[0]?.id;
+      if (!animationId) {
+          console.error('No animation found in manifest.json');
+          return;
+      }
+
+      const animationFile = content.file(`animations/${animationId}.json`);
+      if (!animationFile) {
+          console.error(`Animation file animations/${animationId}.json not found`);
+          return;
+      }
+
+      const animationStr = await animationFile.async('string');
+      const animationData = JSON.parse(animationStr);
+      
+      const blob = new Blob([animationStr], { type: 'application/json' });
+      const animationUrl = URL.createObjectURL(blob);
+      
+      const width = animationData.w;
+      const height = animationData.h;
+
+      handleAddObject('lottie', animationUrl, width, height);
+
+    } catch (e) {
+      console.error('Failed to process .lottie file', e);
+    }
+  };
+
   const handleDrop = (e: React.DragEvent) => { e.preventDefault(); if (e.dataTransfer.files[0]) processFile(e.dataTransfer.files[0]); };
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => { if (e.target.files?.[0]) processFile(e.target.files[0]); };
   
@@ -536,6 +578,9 @@ const App = () => {
       
       if (name.endsWith('.svg')) {
           handleAddObject('svg', url);
+      }
+      else if (name.endsWith('.lottie')) {
+          processLottieFile(file);
       }
       else if (type.startsWith('image/')) {
           const img = new Image();
@@ -568,7 +613,7 @@ const App = () => {
     }
     
     const localTime = currentTime - selectedObject.startTime;
-    const value = getInterpolatedValueAtTime(selectedObject, property, localTime, easingMode);
+    const value = getInterpolatedValueAtTime(selectedObject, property, localTime);
     if (axis !== undefined && Array.isArray(value)) return (value as any)[axis];
     return value;
   }
@@ -650,16 +695,10 @@ const App = () => {
     }));
   };
   
-  const handleLightSettingChange = (light: 'ambientLight' | 'mainLight' | 'rimLight', property: string, value: any, axis?: number) => {
+  const handleLightSettingChange = (light: 'ambientLight', property: string, value: any) => {
     setGlobalSettings(g => {
         const newLightSettings = { ...g[light] } as any;
-        if (axis !== undefined) {
-            const newPosition = [...newLightSettings[property]] as [number,number,number];
-            newPosition[axis] = value;
-            newLightSettings[property] = newPosition;
-        } else {
-            newLightSettings[property] = value;
-        }
+        newLightSettings[property] = value;
         return { ...g, [light]: newLightSettings };
     });
   };
@@ -745,8 +784,6 @@ const App = () => {
         height={450}
         isSnappingEnabled={isSnappingEnabled}
         onToggleSnapping={() => setIsSnappingEnabled(!isSnappingEnabled)}
-        easingMode={easingMode}
-        onToggleEasingMode={() => setEasingMode(p => p === 'arrival' ? 'departure' : 'arrival')}
       >
           <TimelineSequencer 
             objects={objects} 

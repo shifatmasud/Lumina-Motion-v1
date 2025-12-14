@@ -1,5 +1,4 @@
 
-
 import yaml from 'js-yaml';
 import { GlobalSettings, SceneObject, TimelineKeyframe } from '../engine';
 
@@ -18,6 +17,7 @@ export const createYamlString = (settingsData: GlobalSettings, objectsData: Scen
     settings: {
       backgroundColor: settingsData.backgroundColor,
       aspectRatio: settingsData.aspectRatio,
+      showLightHelpers: settingsData.showLightHelpers,
       ground: { show: settingsData.showGround, color: settingsData.groundColor },
       grid: { show: settingsData.showGrid },
       lighting: {

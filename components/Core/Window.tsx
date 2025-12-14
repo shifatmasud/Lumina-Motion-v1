@@ -1,6 +1,3 @@
-
-
-
 import React, { useRef, useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence, useDragControls } from 'framer-motion';
@@ -23,8 +20,6 @@ interface WindowProps {
   onToggleSnapping?: () => void;
   onResetScene?: () => void;
   onOpenProjectSettings?: () => void;
-  easingMode?: 'arrival' | 'departure';
-  onToggleEasingMode?: () => void;
   selectedKeyframe?: { id: string, index: number } | null;
   copiedKeyframeYaml?: string | null;
   onCopyKeyframeAsYaml?: () => void;
@@ -40,14 +35,12 @@ const ContextMenu: React.FC<{
   onToggleSnapping?: () => void;
   onResetScene?: () => void;
   onOpenProjectSettings?: () => void;
-  easingMode?: 'arrival' | 'departure';
-  onToggleEasingMode?: () => void;
   selectedKeyframe?: { id: string, index: number } | null;
   copiedKeyframeYaml?: string | null;
   onCopyKeyframeAsYaml?: () => void;
   onPasteKeyframeFromYaml?: () => void;
 }> = ({ 
-    rect, onClose, windowId, isSnappingEnabled, onToggleSnapping, onResetScene, onOpenProjectSettings, easingMode, onToggleEasingMode,
+    rect, onClose, windowId, isSnappingEnabled, onToggleSnapping, onResetScene, onOpenProjectSettings,
     selectedKeyframe, copiedKeyframeYaml, onCopyKeyframeAsYaml, onPasteKeyframeFromYaml
 }) => {
   const handleItemClick = (action?: () => void) => {
@@ -161,12 +154,7 @@ const ContextMenu: React.FC<{
                         <ToggleRight size={14} /> {isSnappingEnabled ? 'Disable Snapping' : 'Enable Snapping'}
                     </div>
                 )}
-                {onToggleEasingMode && (
-                    <div onClick={() => handleItemClick(onToggleEasingMode)} style={menuItemStyle} onMouseEnter={menuItemHover} onMouseLeave={menuItemLeave}>
-                       <MagicWand size={14} /> Easing: {easingMode === 'arrival' ? 'On Arrival' : 'On Departure'}
-                    </div>
-                )}
-                <div style={{height: '1px', background: DesignSystem.Color.Base.Border[1], margin: '4px 6px'}} />
+                 <div style={{height: '1px', background: DesignSystem.Color.Base.Border[1], margin: '4px 6px'}} />
             </>
         )}
         {baseItems.map(item => (
@@ -198,8 +186,6 @@ export const Window: React.FC<WindowProps> = ({
   onToggleSnapping,
   onResetScene,
   onOpenProjectSettings,
-  easingMode,
-  onToggleEasingMode,
   selectedKeyframe,
   copiedKeyframeYaml,
   onCopyKeyframeAsYaml,
@@ -396,8 +382,6 @@ export const Window: React.FC<WindowProps> = ({
               onToggleSnapping={onToggleSnapping}
               onResetScene={onResetScene}
               onOpenProjectSettings={onOpenProjectSettings}
-              easingMode={easingMode}
-              onToggleEasingMode={onToggleEasingMode}
               selectedKeyframe={selectedKeyframe}
               copiedKeyframeYaml={copiedKeyframeYaml}
               onCopyKeyframeAsYaml={onCopyKeyframeAsYaml}

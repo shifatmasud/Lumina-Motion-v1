@@ -19,6 +19,7 @@
     "uuid": "https://esm.sh/uuid@9.0.1",
     "js-yaml": "https://esm.sh/js-yaml@4.1.0",
     "jszip": "https://esm.sh/jszip@3.10.1",
-    "webm-writer": "https://esm.sh/webm-writer@0.3.0"
+    "webm-writer": "https://esm.sh/webm-writer@0.3.0",
+    "lottie-web": "https://esm.sh/lottie-web@5.12.2"
   }
 }

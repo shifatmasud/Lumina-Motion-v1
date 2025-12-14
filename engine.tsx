@@ -1,5 +1,3 @@
-
-
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
@@ -10,12 +8,13 @@ import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { VignetteShader } from 'three/examples/jsm/shaders/VignetteShader.js';
 import gsap from 'gsap';
+import lottie from 'lottie-web';
 
 export interface TimelineKeyframe {
   time: number; // in seconds, relative to the clip's start
   name?: string; // Optional user-defined name
   easing?: string; // for GSAP
-  values: Partial<Pick<SceneObject, 'position' | 'rotation' | 'scale' | 'metalness' | 'roughness' | 'volume' | 'opacity' | 'curvature' | 'transmission' | 'ior' | 'thickness' | 'clearcoat' | 'clearcoatRoughness' | 'extrusion' | 'pathLength'>>;
+  values: Partial<Pick<SceneObject, 'position' | 'rotation' | 'scale' | 'metalness' | 'roughness' | 'volume' | 'opacity' | 'curvature' | 'transmission' | 'ior' | 'thickness' | 'clearcoat' | 'clearcoatRoughness' | 'extrusion' | 'pathLength' | 'color' | 'intensity'>>;
 }
 
 export interface TransitionEffect {
@@ -32,7 +31,7 @@ export interface TransitionEffect {
 export interface SceneObject {
   id: string;
   name?: string;
-  type: 'mesh' | 'plane' | 'video' | 'glb' | 'audio' | 'camera' | 'svg';
+  type: 'mesh' | 'plane' | 'video' | 'glb' | 'audio' | 'camera' | 'svg' | 'lottie' | 'light';
   url?: string;
   width?: number;
   height?: number;
@@ -40,6 +39,8 @@ export interface SceneObject {
   rotation: [number, number, number];
   scale: [number, number, number];
   color?: string;
+  intensity?: number;
+  lightType?: 'directional' | 'spot';
   extrusion?: number;
   pathLength?: number;
   metalness?: number;
@@ -54,6 +55,7 @@ export interface SceneObject {
   volume?: number; // For audio
   fov?: number; // For camera
   loop?: boolean; // For video/audio
+  wireframe?: boolean; // For debug view
   chromaKey?: {
     enabled: boolean;
     color: string;
@@ -74,10 +76,11 @@ export interface GlobalSettings {
   accentColor: string;
   showGrid: boolean;
   showGround: boolean;
+  showLightHelpers: boolean;
   groundColor: string;
   ambientLight: { color: string; intensity: number; };
-  mainLight: { color: string; intensity: number; position: [number, number, number]; };
-  rimLight: { enabled: boolean; color: string; intensity: number; position: [number, number, number]; };
+  mainLight: { color: string; intensity: number; position: [number, number, number]; }; // Unused but kept for type safety
+  rimLight: { enabled: boolean; color: string; intensity: number; position: [number, number, number]; }; // Unused but kept for type safety
   performance: {
     pixelRatio: number;
     shadowMapSize: 1024 | 2048 | 4096;
@@ -138,6 +141,7 @@ export class Engine {
   pointer: THREE.Vector2;
   objectsMap: Map<string, THREE.Object3D>;
   mediaElements: Map<string, HTMLVideoElement>;
+  lottieAnimations: Map<string, any>;
   composer: EffectComposer;
   bloomPass: UnrealBloomPass;
   vignettePass: ShaderPass;
@@ -146,8 +150,6 @@ export class Engine {
   svgLoader: SVGLoader;
   audioLoader: THREE.AudioLoader;
   ambientLight: THREE.AmbientLight;
-  mainLight: THREE.DirectionalLight;
-  rimLight: THREE.SpotLight;
   gridHelper: THREE.GridHelper;
   ground: THREE.Mesh;
   isUserControllingCamera: boolean = false;
@@ -159,6 +161,7 @@ export class Engine {
     this.onSelect = onSelect;
     this.objectsMap = new Map();
     this.mediaElements = new Map();
+    this.lottieAnimations = new Map();
     this.pointer = new THREE.Vector2();
     this.raycaster = new THREE.Raycaster();
     this.gltfLoader = new GLTFLoader();
@@ -221,31 +224,6 @@ export class Engine {
     // Lights
     this.ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
     this.scene.add(this.ambientLight);
-    
-    this.mainLight = new THREE.DirectionalLight(0xffffff, 1.2);
-    this.mainLight.position.set(5, 10, 7);
-    this.mainLight.castShadow = true;
-    this.mainLight.shadow.mapSize.width = 2048;
-    this.mainLight.shadow.mapSize.height = 2048;
-    this.mainLight.shadow.camera.top = 10;
-    this.mainLight.shadow.camera.bottom = -10;
-    this.mainLight.shadow.camera.left = -10;
-    this.mainLight.shadow.camera.right = 10;
-    this.mainLight.shadow.camera.near = 0.5;
-    this.mainLight.shadow.camera.far = 50;
-    this.mainLight.shadow.bias = -0.0005; 
-    this.mainLight.shadow.blurSamples = 16;
-    this.scene.add(this.mainLight);
-    
-    this.rimLight = new THREE.SpotLight(0x5B50FF, 5);
-    this.rimLight.position.set(-5, 0, -5);
-    this.rimLight.lookAt(0,0,0);
-    this.rimLight.angle = Math.PI / 4;
-    this.rimLight.penumbra = 1; // Soft edge
-    this.rimLight.decay = 2; // Realistic falloff
-    this.rimLight.distance = 20;
-    this.rimLight.castShadow = false; // Rim lights should not cast shadows
-    this.scene.add(this.rimLight);
 
     // Controls
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
@@ -338,7 +316,8 @@ export class Engine {
         transparent: (objData.opacity ?? 1.0) < 1.0 || (objData.transmission ?? 0) > 0,
         opacity: objData.opacity ?? 1.0,
         envMapIntensity: 1.0,
-        side: THREE.DoubleSide
+        side: THREE.DoubleSide,
+        wireframe: !!objData.wireframe
     });
 
     const extrudeSettings = {
@@ -415,7 +394,8 @@ export class Engine {
             transparent: (objData.opacity ?? 1.0) < 1.0,
             opacity: objData.opacity ?? 1.0,
             envMapIntensity: 1.0, 
-            side: THREE.DoubleSide
+            side: THREE.DoubleSide,
+            wireframe: !!objData.wireframe
         });
         mesh = new THREE.Mesh(geometry, material);
         mesh.castShadow = true;
@@ -444,7 +424,7 @@ export class Engine {
            }
        }
        const geometry = new THREE.PlaneGeometry(planeWidth, planeHeight, 32, 1);
-       let material;
+       let material: THREE.Material;
        let videoElement: HTMLVideoElement | null = null;
        
        if (objData.url) {
@@ -464,23 +444,36 @@ export class Engine {
            }
            texture.colorSpace = THREE.SRGBColorSpace;
            
-           material = new THREE.ShaderMaterial({
-               uniforms: {
-                   map: { value: texture },
-                   keyColor: { value: new THREE.Color(objData.chromaKey?.color || '#00ff00') },
-                   similarity: { value: objData.chromaKey?.similarity || 0.1 },
-                   smoothness: { value: objData.chromaKey?.smoothness || 0.1 },
-                   opacity: { value: objData.opacity ?? 1.0 },
-                   curvature: { value: objData.curvature ?? 0.0 },
-                   chromaKeyEnabled: { value: objData.chromaKey?.enabled || false },
-               },
-               vertexShader: chromaKeyVertexShader,
-               fragmentShader: chromaKeyFragmentShader,
-               transparent: true,
-               side: THREE.DoubleSide
-           });
+           const useShader = objData.type === 'video' || (objData.chromaKey?.enabled) || (objData.curvature && Math.abs(objData.curvature) > 0.001);
+
+           if (useShader) {
+               material = new THREE.ShaderMaterial({
+                   uniforms: {
+                       map: { value: texture },
+                       keyColor: { value: new THREE.Color(objData.chromaKey?.color || '#00ff00') },
+                       similarity: { value: objData.chromaKey?.similarity || 0.1 },
+                       smoothness: { value: objData.chromaKey?.smoothness || 0.1 },
+                       opacity: { value: objData.opacity ?? 1.0 },
+                       curvature: { value: objData.curvature ?? 0.0 },
+                       chromaKeyEnabled: { value: objData.chromaKey?.enabled || false },
+                   },
+                   vertexShader: chromaKeyVertexShader,
+                   fragmentShader: chromaKeyFragmentShader,
+                   transparent: true,
+                   side: THREE.DoubleSide,
+                   wireframe: !!objData.wireframe
+               });
+           } else {
+               material = new THREE.MeshBasicMaterial({
+                   map: texture,
+                   transparent: true,
+                   opacity: objData.opacity ?? 1.0,
+                   side: THREE.DoubleSide,
+                   wireframe: !!objData.wireframe
+               });
+           }
        } else {
-           material = new THREE.MeshBasicMaterial({ color: '#333', side: THREE.DoubleSide, transparent: true, opacity: objData.opacity ?? 1.0 });
+           material = new THREE.MeshBasicMaterial({ color: '#333', side: THREE.DoubleSide, transparent: true, opacity: objData.opacity ?? 1.0, wireframe: !!objData.wireframe });
        }
        mesh = new THREE.Mesh(geometry, material);
 
@@ -489,6 +482,48 @@ export class Engine {
            sound.setMediaElementSource(videoElement);
            mesh.add(sound);
        }
+    } else if (objData.type === 'lottie') {
+        let planeWidth = 1.6;
+        let planeHeight = 0.9;
+        if (objData.width && objData.height && objData.width > 0 && objData.height > 0) {
+            const aspectRatio = objData.width / objData.height;
+            if (aspectRatio > 1) {
+                planeWidth = 1.6;
+                planeHeight = 1.6 / aspectRatio;
+            } else {
+                planeHeight = 1.6;
+                planeWidth = 1.6 * aspectRatio;
+            }
+        }
+        
+        const geometry = new THREE.PlaneGeometry(planeWidth, planeHeight);
+        const material = new THREE.MeshBasicMaterial({ color: '#333', transparent: true, opacity: objData.opacity ?? 1.0, side: THREE.DoubleSide, wireframe: !!objData.wireframe });
+        mesh = new THREE.Mesh(geometry, material);
+
+        if (objData.url) {
+            const canvas = document.createElement('canvas');
+            canvas.width = objData.width || 512;
+            canvas.height = objData.height || 512;
+            
+            const anim = lottie.loadAnimation({
+                container: document.createElement('div'), 
+                renderer: 'canvas',
+                loop: objData.loop ?? true,
+                autoplay: false,
+                path: objData.url,
+                rendererSettings: {
+                    context: canvas.getContext('2d')!,
+                    clearCanvas: true,
+                },
+            });
+            this.lottieAnimations.set(objData.id, anim);
+            
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.colorSpace = THREE.SRGBColorSpace;
+            
+            (mesh.material as THREE.MeshBasicMaterial).map = texture;
+            (mesh.material as THREE.MeshBasicMaterial).needsUpdate = true;
+        }
     } else if (objData.type === 'glb') {
         mesh = new THREE.Group();
         const placeholder = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial({ wireframe: true, color: '#555' }));
@@ -513,6 +548,9 @@ export class Engine {
                                  if (objData.opacity !== undefined && objData.opacity < 1.0) {
                                      m.transparent = true;
                                      m.opacity = objData.opacity;
+                                 }
+                                 if ('wireframe' in m) {
+                                     m.wireframe = !!objData.wireframe;
                                  }
                              });
                          }
@@ -539,6 +577,52 @@ export class Engine {
         }
     } else if (objData.type === 'camera') {
         mesh = new THREE.Group() as any;
+    } else if (objData.type === 'light') {
+        const lightGroup = new THREE.Group();
+        let light: THREE.Light;
+        let helper: THREE.Object3D | undefined;
+  
+        if (objData.lightType === 'directional') {
+            const dirLight = new THREE.DirectionalLight(objData.color, objData.intensity);
+            dirLight.castShadow = true;
+            dirLight.shadow.mapSize.width = 2048; 
+            dirLight.shadow.mapSize.height = 2048;
+            dirLight.shadow.camera.top = 10;
+            dirLight.shadow.camera.bottom = -10;
+            dirLight.shadow.camera.left = -10;
+            dirLight.shadow.camera.right = 10;
+            dirLight.shadow.camera.near = 0.5;
+            dirLight.shadow.camera.far = 50;
+            dirLight.shadow.bias = -0.0005; 
+            dirLight.shadow.blurSamples = 16;
+            light = dirLight;
+            helper = new THREE.DirectionalLightHelper(dirLight, 1);
+        } else { // 'spot'
+            const spotLight = new THREE.SpotLight(objData.color, objData.intensity);
+            spotLight.angle = Math.PI / 4;
+            spotLight.penumbra = 1;
+            spotLight.decay = 2;
+            spotLight.distance = 20;
+            spotLight.castShadow = false;
+            light = spotLight;
+            helper = new THREE.SpotLightHelper(spotLight);
+        }
+        
+        lightGroup.add(light);
+        if (helper) {
+            helper.visible = false;
+            lightGroup.userData.helper = helper;
+            this.scene.add(helper);
+        }
+  
+        const geo = new THREE.SphereGeometry(0.1);
+        const mat = new THREE.MeshBasicMaterial({ color: objData.color, transparent: true, opacity: 0.5 });
+        const raycastTarget = new THREE.Mesh(geo, mat);
+        raycastTarget.name = 'light_handle';
+        raycastTarget.visible = false;
+        lightGroup.add(raycastTarget);
+  
+        mesh = lightGroup;
     } else {
         mesh = new THREE.Mesh(new THREE.SphereGeometry(0.5), new THREE.MeshBasicMaterial({ color: 'red' }));
     }
@@ -546,7 +630,7 @@ export class Engine {
     return mesh;
   }
 
-  setTime(time: number, objects: SceneObject[], isPlaying: boolean, timeHasChanged: boolean, easingMode: 'arrival' | 'departure') {
+  setTime(time: number, objects: SceneObject[], isPlaying: boolean, timeHasChanged: boolean) {
     if (!this.scene) return;
     
     objects.forEach(objData => {
@@ -588,6 +672,22 @@ export class Engine {
           }
         }
       }
+      else if (objData.type === 'lottie') {
+          const anim = this.lottieAnimations.get(objData.id);
+          if (anim) {
+              if (isVisible) {
+                  const localTime = time - objData.startTime;
+                  const frame = localTime * anim.frameRate;
+                  
+                  anim.goToAndStop(frame, true);
+                  
+                  const material = (obj3d as THREE.Mesh).material as THREE.MeshBasicMaterial;
+                  if (material.map) {
+                      material.map.needsUpdate = true;
+                  }
+              }
+          }
+      }
       
       if (!isVisible) return;
 
@@ -611,6 +711,8 @@ export class Engine {
       let finalVolume = objData.volume ?? 1.0;
       let finalExtrusion = objData.extrusion ?? 0.1;
       let finalPathLength = objData.pathLength ?? 1.0;
+      let finalColor = objData.color;
+      let finalIntensity = objData.intensity;
 
       // Animation Interpolation
       if (objData.animations && objData.animations.length > 0) {
@@ -621,8 +723,9 @@ export class Engine {
             metalness: finalMetalness, roughness: finalRoughness, opacity: finalOpacity, volume: finalVolume,
             curvature: finalCurvature, transmission: finalTransmission, ior: finalIor, thickness: finalThickness,
             clearcoat: finalClearcoat, clearcoatRoughness: finalClearcoatRoughness, extrusion: finalExtrusion, pathLength: finalPathLength,
+            color: finalColor, intensity: finalIntensity,
         };
-        const baseKeyframe: TimelineKeyframe = { time: 0, values: {}, easing: 'power2.out' };
+        const baseKeyframe: TimelineKeyframe = { time: 0, values: {}, easing: 'none' };
         
         let departureKf: TimelineKeyframe = baseKeyframe;
         let arrivalKf: TimelineKeyframe | null = null;
@@ -635,8 +738,7 @@ export class Engine {
         const duration = arrivalKf.time - departureKf.time;
         const progress = duration > 0 ? (localTime - departureKf.time) / duration : 1;
         
-        const easingSource = easingMode === 'arrival' ? arrivalKf : departureKf;
-        const ease = gsap.parseEase(easingSource.easing || 'power2.out');
+        const ease = gsap.parseEase(arrivalKf.easing || 'none');
         const easedProgress = ease(progress);
 
         const departureValues = { ...baseState, ...departureKf.values };
@@ -661,6 +763,8 @@ export class Engine {
         if (departureValues.volume !== undefined && arrivalValues.volume !== undefined) finalVolume = lerp(departureValues.volume, arrivalValues.volume);
         if (departureValues.extrusion !== undefined && arrivalValues.extrusion !== undefined) finalExtrusion = lerp(departureValues.extrusion, arrivalValues.extrusion);
         if (departureValues.pathLength !== undefined && arrivalValues.pathLength !== undefined) finalPathLength = lerp(departureValues.pathLength, arrivalValues.pathLength);
+        if (departureValues.color !== undefined && arrivalValues.color !== undefined) finalColor = lerp(departureValues.color, arrivalValues.color);
+        if (departureValues.intensity !== undefined && arrivalValues.intensity !== undefined) finalIntensity = lerp(departureValues.intensity, arrivalValues.intensity);
       }
 
       // Geometry Update for SVG (if needed)
@@ -698,7 +802,16 @@ export class Engine {
            }
       };
 
-      if (obj3d instanceof THREE.Mesh) {
+      if (objData.type === 'light') {
+        const light = obj3d.children.find(c => c instanceof THREE.Light) as THREE.Light & { intensity: number; color: THREE.Color };
+        if (light) {
+            if (finalColor) light.color.set(finalColor);
+            if (finalIntensity !== undefined) light.intensity = finalIntensity;
+        }
+        if (obj3d.userData.helper) {
+            obj3d.userData.helper.update();
+        }
+      } else if (obj3d instanceof THREE.Mesh) {
           if (Array.isArray(obj3d.material)) obj3d.material.forEach(updateMaterial);
           else updateMaterial(obj3d.material);
       } else {
@@ -798,15 +911,38 @@ export class Engine {
         unseen.delete(objData.id);
         
         obj3d.traverse(child => {
-            if (child instanceof THREE.Mesh && (child.material instanceof THREE.MeshPhysicalMaterial)) {
-                 child.material.color.set(objData.color || '#ffffff');
+            if (child instanceof THREE.Mesh) {
+                const materials = Array.isArray(child.material) ? child.material : [child.material];
+                materials.forEach(mat => {
+                    if ('wireframe' in mat) {
+                        mat.wireframe = !!objData.wireframe;
+                    }
+                    if (mat instanceof THREE.MeshPhysicalMaterial) {
+                        mat.color.set(objData.color || '#ffffff');
+                    }
+                });
             }
         });
+
+        if (objData.type === 'light') {
+            const light = obj3d.children.find(c => c instanceof THREE.Light) as THREE.Light & { color: THREE.Color };
+            const raycastTarget = obj3d.children.find(c => c instanceof THREE.Mesh) as THREE.Mesh;
+            if (light && objData.color) {
+                light.color.set(objData.color);
+            }
+            if (raycastTarget && raycastTarget.material instanceof THREE.MeshBasicMaterial) {
+                if (objData.color) raycastTarget.material.color.set(objData.color);
+            }
+        }
         
-        if (objData.type === 'video') {
-            const video = this.mediaElements.get(objData.id);
-            if (video && video.loop !== (objData.loop ?? true)) {
-                video.loop = objData.loop ?? true;
+        if (objData.type === 'video' || objData.type === 'lottie') {
+            const mediaObject = this.mediaElements.get(objData.id);
+            if (mediaObject && mediaObject.loop !== (objData.loop ?? true)) {
+                mediaObject.loop = objData.loop ?? true;
+            }
+            const lottieAnim = this.lottieAnimations.get(objData.id);
+            if (lottieAnim && lottieAnim.loop !== (objData.loop ?? true)) {
+                lottieAnim.loop = objData.loop ?? true;
             }
         }
         
@@ -826,6 +962,9 @@ export class Engine {
     unseen.forEach(id => {
         const obj = this.objectsMap.get(id);
         if (obj) {
+            if (obj.userData.helper) {
+                this.scene.remove(obj.userData.helper);
+            }
             obj.traverse((child: any) => {
                 if (child.isMesh) {
                     child.geometry.dispose();
@@ -849,6 +988,11 @@ export class Engine {
             }
             this.mediaElements.delete(id);
         }
+        if (this.lottieAnimations.has(id)) {
+            const anim = this.lottieAnimations.get(id);
+            anim.destroy();
+            this.lottieAnimations.delete(id);
+        }
     });
   }
 
@@ -867,31 +1011,39 @@ export class Engine {
       this.ambientLight.color.set(settings.ambientLight.color);
       this.ambientLight.intensity = settings.ambientLight.intensity;
 
-      this.mainLight.color.set(settings.mainLight.color);
-      this.mainLight.intensity = settings.mainLight.intensity;
-      this.mainLight.position.fromArray(settings.mainLight.position);
-
-      this.rimLight.visible = settings.rimLight.enabled;
-      this.rimLight.color.set(settings.rimLight.color);
-      this.rimLight.intensity = settings.rimLight.intensity;
-      this.rimLight.position.fromArray(settings.rimLight.position);
-      this.rimLight.lookAt(0,0,0);
-
       this.gridHelper.visible = settings.showGrid;
       this.ground.visible = settings.showGround;
       if (this.ground.material instanceof THREE.MeshStandardMaterial) {
         this.ground.material.color.set(settings.groundColor);
       }
       
+      this.objectsMap.forEach(obj => {
+        if (obj.userData.helper) {
+          obj.userData.helper.visible = settings.showLightHelpers;
+        }
+        const handle = obj.getObjectByName('light_handle');
+        if (handle) {
+          handle.visible = settings.showLightHelpers;
+        }
+      });
+      
       // Performance Settings
       this.renderer.setPixelRatio(settings.performance.pixelRatio);
-      if (this.mainLight.shadow.mapSize.width !== settings.performance.shadowMapSize) {
-          this.mainLight.shadow.mapSize.width = settings.performance.shadowMapSize;
-          this.mainLight.shadow.mapSize.height = settings.performance.shadowMapSize;
-          // Important: We need to update the shadow map itself
-          if (this.mainLight.shadow.map) {
-              this.mainLight.shadow.map.dispose();
-              this.mainLight.shadow.map = null as any;
+      
+      const lightObjectGroup = Array.from(this.objectsMap.values()).find(obj => 
+        obj.children.some(c => c instanceof THREE.DirectionalLight && c.castShadow)
+      );
+
+      if (lightObjectGroup) {
+          const lightWithShadow = lightObjectGroup.children.find(c => c instanceof THREE.DirectionalLight) as THREE.DirectionalLight | undefined;
+    
+          if (lightWithShadow && lightWithShadow.shadow && lightWithShadow.shadow.mapSize.width !== settings.performance.shadowMapSize) {
+              lightWithShadow.shadow.mapSize.width = settings.performance.shadowMapSize;
+              lightWithShadow.shadow.mapSize.height = settings.performance.shadowMapSize;
+              if (lightWithShadow.shadow.map) {
+                  lightWithShadow.shadow.map.dispose();
+                  (lightWithShadow.shadow.map as any) = null;
+              }
           }
       }
   }

@@ -1,5 +1,3 @@
-
-
 import { DesignSystem } from './theme';
 import { SceneObject, GlobalSettings, TransitionEffect } from './engine';
 
@@ -11,7 +9,7 @@ export const defaultTransition: TransitionEffect = {
   scale: 0.8,
   position: [0, 0, 0],
   rotation: [0, 0, 0],
-  easing: 'power2.out',
+  easing: 'none',
 };
 
 export const materialPresets: { [key: string]: Partial<SceneObject> } = {
@@ -24,6 +22,8 @@ export const materialPresets: { [key: string]: Partial<SceneObject> } = {
     'plastic': { metalness: 0.1, roughness: 0.5, transmission: 0, clearcoat: 0.5, clearcoatRoughness: 0.1, ior: 1.5, opacity: 1 },
     'water': { metalness: 0.1, roughness: 0.1, transmission: 0.9, ior: 1.33, thickness: 1.0, clearcoat: 1.0, clearcoatRoughness: 0, opacity: 1 },
 };
+
+export const DEFAULT_ACCENT_COLOR = '#5B50FF';
 
 export const INITIAL_OBJECTS: SceneObject[] = [
     {
@@ -38,7 +38,8 @@ export const INITIAL_OBJECTS: SceneObject[] = [
       animations: [],
       introTransition: { ...defaultTransition },
       outroTransition: { ...defaultTransition },
-      fov: 60
+      fov: 60,
+      wireframe: false,
     },
     { 
       id: '1', 
@@ -54,10 +55,43 @@ export const INITIAL_OBJECTS: SceneObject[] = [
       animations: [],
       introTransition: { ...defaultTransition },
       outroTransition: { ...defaultTransition },
+      wireframe: false,
+    },
+    {
+      id: 'main-light',
+      type: 'light',
+      lightType: 'directional',
+      name: 'Main Light',
+      position: [5, 10, 7],
+      rotation: [0, 0, 0],
+      scale: [1, 1, 1],
+      color: '#ffffff',
+      intensity: 1.2,
+      startTime: 0,
+      duration: 5,
+      animations: [],
+      introTransition: { ...defaultTransition },
+      outroTransition: { ...defaultTransition },
+      wireframe: false,
+    },
+    {
+      id: 'rim-light',
+      type: 'light',
+      lightType: 'spot',
+      name: 'Rim Light',
+      position: [0, 0, 1],
+      rotation: [0, 0, 0],
+      scale: [1, 1, 1],
+      color: DEFAULT_ACCENT_COLOR,
+      intensity: 5.0,
+      startTime: 0,
+      duration: 5,
+      animations: [],
+      introTransition: { ...defaultTransition },
+      outroTransition: { ...defaultTransition },
+      wireframe: false,
     }
 ];
-
-export const DEFAULT_ACCENT_COLOR = '#5B50FF';
 
 export const INITIAL_GLOBAL_SETTINGS: GlobalSettings = {
     backgroundColor: '#000000',
@@ -66,10 +100,11 @@ export const INITIAL_GLOBAL_SETTINGS: GlobalSettings = {
     accentColor: DEFAULT_ACCENT_COLOR,
     showGrid: true,
     showGround: true,
+    showLightHelpers: false,
     groundColor: '#050505',
     ambientLight: { color: '#ffffff', intensity: 0.4 },
-    mainLight: { color: '#ffffff', intensity: 1.2, position: [5, 10, 7] },
-    rimLight: { enabled: true, color: DEFAULT_ACCENT_COLOR, intensity: 5.0, position: [0, 0, 1] },
+    mainLight: { color: '#ffffff', intensity: 1.2, position: [5, 10, 7] }, // Kept for type safety, but will be unused
+    rimLight: { enabled: true, color: DEFAULT_ACCENT_COLOR, intensity: 5.0, position: [0, 0, 1] }, // Kept for type safety, but will be unused
     performance: {
         pixelRatio: Math.min(window.devicePixelRatio, 1.5),
         shadowMapSize: 2048,
@@ -80,12 +115,18 @@ export const INITIAL_GLOBAL_SETTINGS: GlobalSettings = {
 export const ACCENT_COLORS = [DEFAULT_ACCENT_COLOR, '#FF4F1F', '#BEF264', '#5865F2'];
 
 export const EASING_OPTIONS = [
-  { label: 'Default (Ease Out)', value: 'power2.out' },
   { label: 'Linear', value: 'none' },
-  { label: 'Ease In', value: 'power2.in' },
-  { label: 'Ease In-Out', value: 'power2.inOut' },
-  { label: 'Bounce Out', value: 'bounce.out' },
-  { label: 'Elastic Out', value: 'elastic.out(1, 0.75)' },
+  { label: 'Ease In (Sine)', value: 'power1.in' },
+  { label: 'Ease Out (Sine)', value: 'power1.out' },
+  { label: 'Ease In-Out (Sine)', value: 'power1.inOut' },
+  { label: 'Ease In (Cubic)', value: 'power3.in' },
+  { label: 'Ease Out (Cubic)', value: 'power3.out' },
+  { label: 'Ease In-Out (Cubic)', value: 'power3.inOut' },
   { label: 'Anticipate (Back In)', value: 'back.in(1.7)' },
   { label: 'Overshoot (Back Out)', value: 'back.out(1.7)' },
+  { label: 'Bounce In', value: 'bounce.in' },
+  { label: 'Bounce Out', value: 'bounce.out' },
+  { label: 'Elastic In', value: 'elastic.in(1, 0.75)' },
+  { label: 'Elastic Out', value: 'elastic.out(1, 0.75)' },
+  { label: 'Squash & Stretch', value: 'elastic.out(1, 0.4)' },
 ];

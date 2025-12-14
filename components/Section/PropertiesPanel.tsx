@@ -1,5 +1,4 @@
 
-
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -37,7 +36,7 @@ interface PropertiesPanelProps {
     handleRemoveObject: (id: string) => void;
     handleKeyframePropertyChange: (property: keyof TimelineKeyframe, value: any) => void;
     handleRemoveKeyframe: () => void;
-    handleLightSettingChange: (light: 'ambientLight' | 'mainLight' | 'rimLight', property: string, value: any, axis?: number) => void;
+    handleLightSettingChange: (light: 'ambientLight', property: string, value: any) => void;
     setGlobalSettings: React.Dispatch<React.SetStateAction<GlobalSettings>>;
     setAccentColor: React.Dispatch<React.SetStateAction<string>>;
     setIsScaleLocked: React.Dispatch<React.SetStateAction<boolean>>;
@@ -63,6 +62,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
     const selectedKeyframeData = getSelectedKeyframeData();
 
     if (selectedObject) {
+        const isLocked = selectedObject.type === 'camera' || selectedObject.type === 'light';
         return (
             <div style={{ display: 'flex', flexDirection: 'column', gap: DesignSystem.Space(3) }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: DesignSystem.Color.Base.Surface[2], padding: DesignSystem.Space(2), borderRadius: DesignSystem.Effect.Radius.M }}>
@@ -118,7 +118,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                     </>
                   )}
 
-                  {selectedObject.type !== 'camera' && selectedObject.type !== 'audio' && (
+                  {selectedObject.type !== 'camera' && selectedObject.type !== 'audio' && selectedObject.type !== 'light' && (
                     <>
                       <Divider />
                        <div style={{ display: 'flex', alignItems: 'center', gap: DesignSystem.Space(2), padding: `0 ${DesignSystem.Space(1)}`, height: '16px' }}>
@@ -136,7 +136,33 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                   {selectedObject.type === 'camera' && ( <div style={{ marginTop: '8px' }}> <Slider label="FOV" value={selectedObject.fov || 60} min={10} max={120} step={1} onChange={(v) => handleUpdateObject(selectedObject.id, { fov: v })} /> </div> )}
                 </Group>
                 
-                {selectedObject.type !== 'camera' && selectedObject.type !== 'audio' && ( <Group title="APPEARANCE" icon={<Eye weight="fill"/>}> <PropSlider label="OPACITY" value={getControlValue('opacity')} onChange={(v: number) => handleControlChange('opacity', v)} isMode={selectedKeyframe?.id === selectedObject.id} min={0} max={1} step={0.01} /> </Group> )}
+                {selectedObject.type === 'light' && (
+                    <Group title="LIGHT" icon={<Lightbulb weight="fill" />}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                            <label style={{ ...DesignSystem.Type.Label.S, color: DesignSystem.Color.Base.Content[2] }}>COLOR</label>
+                            <div style={{ display: 'flex', gap: DesignSystem.Space(2), alignItems: 'center' }}>
+                                <div style={{ width: '32px', height: '32px', borderRadius: '8px', overflow: 'hidden', border: `1px solid ${DesignSystem.Color.Base.Border[2]}`, flexShrink: 0 }}>
+                                    <input type="color" value={getControlValue('color')} onChange={(e) => handleControlChange('color', e.target.value)} style={{ width: '150%', height: '150%', margin: '-25%', padding: 0, border: 'none', cursor: 'pointer' }} />
+                                </div>
+                                <Input type="text" value={getControlValue('color')} onChange={(e) => handleControlChange('color', e.target.value)} style={{ flex: 1 }} />
+                            </div>
+                        </div>
+                        <PropSlider label="INTENSITY" value={getControlValue('intensity')} onChange={(v: number) => handleControlChange('intensity', v)} isMode={selectedKeyframe?.id === selectedObject.id} min={0} max={20} step={0.1} />
+                    </Group>
+                )}
+
+                {selectedObject.type !== 'camera' && selectedObject.type !== 'audio' && selectedObject.type !== 'light' && (
+                    <Group title="APPEARANCE" icon={<Eye weight="fill"/>}>
+                        <PropSlider label="OPACITY" value={getControlValue('opacity')} onChange={(v: number) => handleControlChange('opacity', v)} isMode={selectedKeyframe?.id === selectedObject.id} min={0} max={1} step={0.01} />
+                        {(selectedObject.type === 'mesh' || selectedObject.type === 'svg' || selectedObject.type === 'glb' || selectedObject.type === 'plane' || selectedObject.type === 'video' || selectedObject.type === 'lottie') && (
+                            <Toggle 
+                                label="WIREFRAME" 
+                                value={selectedObject.wireframe || false} 
+                                onChange={(v) => handleUpdateObject(selectedObject.id, { wireframe: v })} 
+                            />
+                        )}
+                    </Group>
+                )}
                 
                 {(selectedObject.type === 'mesh' || selectedObject.type === 'svg') && (
                     <Group title="MATERIAL" icon={<Palette />}>
@@ -169,7 +195,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
 
                 {(selectedObject.type === 'video' || selectedObject.type === 'plane') && ( <Group title="DISTORTION" icon={<Cylinder />}> <PropSlider label="CYLINDER WRAP" value={getControlValue('curvature')} onChange={(v: number) => handleControlChange('curvature', v)} isMode={selectedKeyframe?.id === selectedObject.id} min={-0.5} max={0.5} step={0.01} /> </Group> )}
 
-                {selectedObject.type === 'video' && ( <Group title="PLAYBACK" icon={<FilmStrip />}> <Toggle label="LOOP" value={selectedObject.loop ?? true} onChange={(v) => handleUpdateObject(selectedObject.id, { loop: v })} /> <div style={{ ...DesignSystem.Type.Label.S, fontSize: '10px', color: DesignSystem.Color.Base.Content[3], padding: '4px', textAlign: 'center', background: DesignSystem.Color.Base.Surface[2], borderRadius: DesignSystem.Effect.Radius.S }}> Playback is controlled by the main timeline. Audio requires user interaction to start. </div> </Group> )}
+                {(selectedObject.type === 'video' || selectedObject.type === 'lottie') && ( <Group title="PLAYBACK" icon={<FilmStrip />}> <Toggle label="LOOP" value={selectedObject.loop ?? true} onChange={(v) => handleUpdateObject(selectedObject.id, { loop: v })} /> <div style={{ ...DesignSystem.Type.Label.S, fontSize: '10px', color: DesignSystem.Color.Base.Content[3], padding: '4px', textAlign: 'center', background: DesignSystem.Color.Base.Surface[2], borderRadius: DesignSystem.Effect.Radius.S }}> Playback is controlled by the main timeline.</div> </Group> )}
 
                 {(selectedObject.type === 'video' || selectedObject.type === 'plane') && (
                     <Group title="EFFECTS">
@@ -195,11 +221,11 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                     </Group>
                 )}
                 
-                {selectedObject.type !== 'camera' && ( <Group title="TRANSITIONS" icon={<ToggleLeft weight="fill"/>}> <TransitionControls title="INTRO" transition={selectedObject.introTransition} onUpdate={(t) => handleUpdateObject(selectedObject.id, { introTransition: t })} /> <Divider /> <TransitionControls title="OUTRO" transition={selectedObject.outroTransition} onUpdate={(t) => handleUpdateObject(selectedObject.id, { outroTransition: t })} /> </Group> )}
+                {selectedObject.type !== 'camera' && selectedObject.type !== 'light' && ( <Group title="TRANSITIONS" icon={<ToggleLeft weight="fill"/>}> <TransitionControls title="INTRO" transition={selectedObject.introTransition} onUpdate={(t) => handleUpdateObject(selectedObject.id, { introTransition: t })} /> <Divider /> <TransitionControls title="OUTRO" transition={selectedObject.outroTransition} onUpdate={(t) => handleUpdateObject(selectedObject.id, { outroTransition: t })} /> </Group> )}
                 
                 <Divider />
-                <Button variant="ghost" onClick={() => handleRemoveObject(selectedObject.id)} disabled={selectedObject.type === 'camera'} style={{ color: selectedObject.type === 'camera' ? DesignSystem.Color.Base.Content[3] : DesignSystem.Color.Feedback.Error, width: '100%', opacity: selectedObject.type === 'camera' ? 0.5 : 0.7 }}>
-                    <Trash size={16} weight="bold" /> {selectedObject.type === 'camera' ? 'LOCKED' : 'DELETE'}
+                <Button variant="ghost" onClick={() => handleRemoveObject(selectedObject.id)} disabled={isLocked} style={{ color: isLocked ? DesignSystem.Color.Base.Content[3] : DesignSystem.Color.Feedback.Error, width: '100%', opacity: isLocked ? 0.5 : 0.7 }}>
+                    <Trash size={16} weight="bold" /> {isLocked ? 'LOCKED' : 'DELETE'}
                 </Button>
             </div>
         );
@@ -230,6 +256,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                 
                 <Toggle label="SHOW GRID" value={globalSettings.showGrid} onChange={(v) => setGlobalSettings(g => ({ ...g, showGrid: v }))} />
                 <Toggle label="SHOW GROUND" value={globalSettings.showGround} onChange={(v) => setGlobalSettings(g => ({ ...g, showGround: v }))} />
+                <Toggle label="SHOW LIGHT HELPERS" value={globalSettings.showLightHelpers} onChange={(v) => setGlobalSettings(g => ({ ...g, showLightHelpers: v }))} />
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                     <span style={DesignSystem.Type.Label.S}>ACCENT COLOR</span>
@@ -245,47 +272,16 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                          </div>
                     </div>
                 </div>
-            </Group>
-            <Group title="LIGHTING" icon={<Lightbulb weight="fill"/>}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: DesignSystem.Space(3)}}>
-                    <div>
-                        <span style={{ ...DesignSystem.Type.Label.S, color: DesignSystem.Color.Base.Content[2], display: 'block', marginBottom: DesignSystem.Space(2) }}>AMBIENT LIGHT</span>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: DesignSystem.Space(2)}}>
-                            <Input label="COLOR" type="color" value={globalSettings.ambientLight.color} onChange={e => handleLightSettingChange('ambientLight', 'color', e.target.value)} />
-                            <Slider label="INTENSITY" value={globalSettings.ambientLight.intensity} min={0} max={2} step={0.01} onChange={v => handleLightSettingChange('ambientLight', 'intensity', v)} />
-                        </div>
-                    </div>
-                    <Divider />
-                    <div>
-                        <span style={{ ...DesignSystem.Type.Label.S, color: DesignSystem.Color.Base.Content[2], display: 'block', marginBottom: DesignSystem.Space(2) }}>MAIN (DIRECTIONAL)</span>
-                         <div style={{ display: 'flex', flexDirection: 'column', gap: DesignSystem.Space(2)}}>
-                            <Input label="COLOR" type="color" value={globalSettings.mainLight.color} onChange={e => handleLightSettingChange('mainLight', 'color', e.target.value)} />
-                            <Slider label="INTENSITY" value={globalSettings.mainLight.intensity} min={0} max={5} step={0.1} onChange={v => handleLightSettingChange('mainLight', 'intensity', v)} />
-                            <Slider label="POS X" value={globalSettings.mainLight.position[0]} min={-20} max={20} step={0.5} onChange={v => handleLightSettingChange('mainLight', 'position', v, 0)} />
-                            <Slider label="POS Y" value={globalSettings.mainLight.position[1]} min={-20} max={20} step={0.5} onChange={v => handleLightSettingChange('mainLight', 'position', v, 1)} />
-                            <Slider label="POS Z" value={globalSettings.mainLight.position[2]} min={-20} max={20} step={0.5} onChange={v => handleLightSettingChange('mainLight', 'position', v, 2)} />
-                        </div>
-                    </div>
-                    <Divider />
-                     <div>
-                        <span style={{ ...DesignSystem.Type.Label.S, color: DesignSystem.Color.Base.Content[2], display: 'block', marginBottom: DesignSystem.Space(2) }}>RIM (SPOTLIGHT)</span>
-                         <div style={{ display: 'flex', flexDirection: 'column', gap: DesignSystem.Space(2)}}>
-                            <Toggle label="ENABLE RIM LIGHT" value={globalSettings.rimLight.enabled} onChange={v => handleLightSettingChange('rimLight', 'enabled', v)} />
-                            <AnimatePresence>
-                            {globalSettings.rimLight.enabled && (
-                                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} style={{ display: 'flex', flexDirection: 'column', gap: DesignSystem.Space(2), overflow: 'hidden', marginTop: DesignSystem.Space(2) }}>
-                                    <Input label="COLOR" type="color" value={globalSettings.rimLight.color} onChange={e => handleLightSettingChange('rimLight', 'color', e.target.value)} />
-                                    <Slider label="INTENSITY" value={globalSettings.rimLight.intensity} min={0} max={20} step={0.5} onChange={v => handleLightSettingChange('rimLight', 'intensity', v)} />
-                                    <Slider label="POS X" value={globalSettings.rimLight.position[0]} min={-20} max={20} step={0.5} onChange={v => handleLightSettingChange('rimLight', 'position', v, 0)} />
-                                    <Slider label="POS Y" value={globalSettings.rimLight.position[1]} min={-20} max={20} step={0.5} onChange={v => handleLightSettingChange('rimLight', 'position', v, 1)} />
-                                    <Slider label="POS Z" value={globalSettings.rimLight.position[2]} min={-20} max={20} step={0.5} onChange={v => handleLightSettingChange('rimLight', 'position', v, 2)} />
-                                </motion.div>
-                            )}
-                            </AnimatePresence>
-                        </div>
+                <Divider />
+                <div>
+                    <span style={{ ...DesignSystem.Type.Label.S, color: DesignSystem.Color.Base.Content[2], display: 'block', marginBottom: DesignSystem.Space(2) }}>AMBIENT LIGHT</span>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: DesignSystem.Space(2)}}>
+                        <Input label="COLOR" type="color" value={globalSettings.ambientLight.color} onChange={e => handleLightSettingChange('ambientLight', 'color', e.target.value)} />
+                        <Slider label="INTENSITY" value={globalSettings.ambientLight.intensity} min={0} max={2} step={0.01} onChange={v => handleLightSettingChange('ambientLight', 'intensity', v)} />
                     </div>
                 </div>
             </Group>
+            
             <Group title="EFFECTS" icon={<Sparkle weight="fill"/>}>
                 <Toggle label="BLOOM" value={globalSettings.bloom.enabled} onChange={(v) => setGlobalSettings(g => ({ ...g, bloom: { ...g.bloom, enabled: v } }))} />
                  <AnimatePresence>
