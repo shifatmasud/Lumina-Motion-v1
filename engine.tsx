@@ -1,3 +1,4 @@
+
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
@@ -56,6 +57,8 @@ export interface SceneObject {
   fov?: number; // For camera
   loop?: boolean; // For video/audio
   wireframe?: boolean; // For debug view
+  locked?: boolean;
+  visible?: boolean;
   chromaKey?: {
     enabled: boolean;
     color: string;
@@ -75,9 +78,7 @@ export interface GlobalSettings {
   vignette: { enabled: boolean; offset: number; darkness: number; };
   accentColor: string;
   showGrid: boolean;
-  showGround: boolean;
   showLightHelpers: boolean;
-  groundColor: string;
   ambientLight: { color: string; intensity: number; };
   mainLight: { color: string; intensity: number; position: [number, number, number]; }; // Unused but kept for type safety
   rimLight: { enabled: boolean; color: string; intensity: number; position: [number, number, number]; }; // Unused but kept for type safety
@@ -151,7 +152,6 @@ export class Engine {
   audioLoader: THREE.AudioLoader;
   ambientLight: THREE.AmbientLight;
   gridHelper: THREE.GridHelper;
-  ground: THREE.Mesh;
   isUserControllingCamera: boolean = false;
   
   onSelect?: (id: string | null) => void;
@@ -176,15 +176,6 @@ export class Engine {
     // Grid - Subtle dark grid
     this.gridHelper = new THREE.GridHelper(30, 30, 0x222222, 0x111111);
     this.scene.add(this.gridHelper);
-
-    // Ground plane for shadows
-    const groundGeo = new THREE.PlaneGeometry(30, 30);
-    const groundMat = new THREE.MeshStandardMaterial({ color: 0x050505, roughness: 0.8, metalness: 0 });
-    this.ground = new THREE.Mesh(groundGeo, groundMat);
-    this.ground.rotation.x = -Math.PI / 2;
-    this.ground.position.y = 0;
-    this.ground.receiveShadow = true;
-    this.scene.add(this.ground);
 
     // Camera
     this.camera = new THREE.PerspectiveCamera(60, container.clientWidth / container.clientHeight, 0.1, 1000);
@@ -638,7 +629,7 @@ export class Engine {
       if (!obj3d) return;
 
       const isVisible = time >= objData.startTime && time <= objData.startTime + objData.duration;
-      obj3d.visible = isVisible;
+      obj3d.visible = isVisible && objData.visible !== false;
       
       const sound = obj3d.children.find(c => c instanceof THREE.Audio || c instanceof THREE.PositionalAudio) as THREE.Audio | THREE.PositionalAudio;
 
@@ -689,7 +680,7 @@ export class Engine {
           }
       }
       
-      if (!isVisible) return;
+      if (!obj3d.visible) return;
 
       const localTime = time - objData.startTime;
 
@@ -1012,10 +1003,6 @@ export class Engine {
       this.ambientLight.intensity = settings.ambientLight.intensity;
 
       this.gridHelper.visible = settings.showGrid;
-      this.ground.visible = settings.showGround;
-      if (this.ground.material instanceof THREE.MeshStandardMaterial) {
-        this.ground.material.color.set(settings.groundColor);
-      }
       
       this.objectsMap.forEach(obj => {
         if (obj.userData.helper) {

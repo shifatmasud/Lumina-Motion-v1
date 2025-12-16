@@ -26,6 +26,7 @@ interface ToggleProps {
   label: string;
   value: boolean;
   onChange: (val: boolean) => void;
+  style?: React.CSSProperties;
 }
 
 interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
@@ -153,12 +154,12 @@ export const Slider: React.FC<SliderProps> = ({ label, value, min = 0, max = 100
   );
 };
 
-export const Toggle: React.FC<ToggleProps> = ({ label, value, onChange }) => {
+export const Toggle: React.FC<ToggleProps> = ({ label, value, onChange, style }) => {
   return (
     <div 
       onClick={() => onChange(!value)} 
       onPointerDown={(e) => e.stopPropagation()}
-      style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', height: '32px', cursor: 'pointer', padding: '0 4px' }}
+      style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', height: '32px', cursor: 'pointer', padding: '0 4px', ...style }}
     >
       <span style={{ ...DesignSystem.Type.Label.S, color: DesignSystem.Color.Base.Content[2] }}>{label}</span>
       <div style={{ width: '32px', height: '18px', background: value ? DesignSystem.Color.Accent.Surface[1] : DesignSystem.Color.Base.Surface[3], borderRadius: '99px', position: 'relative', transition: DesignSystem.Effect.Transition.Fast, boxShadow: value ? DesignSystem.Effect.Shadow.Glow : 'none' }}>

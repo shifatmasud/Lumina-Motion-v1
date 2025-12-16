@@ -1,3 +1,4 @@
+
 import React, { useRef, useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence, useDragControls } from 'framer-motion';
@@ -103,18 +104,6 @@ const ContextMenu: React.FC<{
           gap: '2px'
         }}
       >
-        {windowId === 'assets' && onOpenProjectSettings && (
-            <>
-            <div 
-                onClick={() => handleItemClick(onOpenProjectSettings)}
-                style={menuItemStyle}
-                onMouseEnter={menuItemHover} onMouseLeave={menuItemLeave}
-            >
-                <Gear size={14} /> Project Settings
-            </div>
-            <div style={{height: '1px', background: DesignSystem.Color.Base.Border[1], margin: '4px 6px'}} />
-            </>
-        )}
         {windowId === 'props' && (
             <>
                 <div 
@@ -131,11 +120,23 @@ const ContextMenu: React.FC<{
                 >
                     <ClipboardText size={14} /> Paste from YAML
                 </div>
-                {onResetScene && <div style={{height: '1px', background: DesignSystem.Color.Base.Border[1], margin: '4px 6px'}} />}
             </>
+        )}
+        {windowId === 'props' && onOpenProjectSettings && (
+             <>
+             <div style={{height: '1px', background: DesignSystem.Color.Base.Border[1], margin: '4px 6px'}} />
+             <div 
+                 onClick={() => handleItemClick(onOpenProjectSettings)}
+                 style={menuItemStyle}
+                 onMouseEnter={menuItemHover} onMouseLeave={menuItemLeave}
+             >
+                 <Gear size={14} /> Project Settings
+             </div>
+             </>
         )}
         {windowId === 'props' && onResetScene && (
             <>
+            <div style={{height: '1px', background: DesignSystem.Color.Base.Border[1], margin: '4px 6px'}} />
             <div 
                 onClick={() => handleItemClick(onResetScene)}
                 style={{ ...menuItemStyle, color: DesignSystem.Color.Feedback.Error }}
@@ -144,7 +145,6 @@ const ContextMenu: React.FC<{
             >
                 <ArrowCounterClockwise size={14} /> Reset Scene
             </div>
-            <div style={{height: '1px', background: DesignSystem.Color.Base.Border[1], margin: '4px 6px'}} />
             </>
         )}
         {windowId === 'timeline' && (
@@ -157,6 +157,7 @@ const ContextMenu: React.FC<{
                  <div style={{height: '1px', background: DesignSystem.Color.Base.Border[1], margin: '4px 6px'}} />
             </>
         )}
+         <div style={{height: '1px', background: DesignSystem.Color.Base.Border[1], margin: '4px 6px'}} />
         {baseItems.map(item => (
             <div key={item} 
                 onClick={() => handleItemClick()}

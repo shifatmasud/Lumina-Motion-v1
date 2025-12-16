@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import { v4 as uuidv4 } from 'uuid';
@@ -323,7 +324,7 @@ const App = () => {
   };
 
   const handleRemoveObject = (id: string) => {
-      if (id === 'camera-main' || id === 'main-light' || id === 'rim-light') return;
+      if (id === 'camera-main' || id === 'main-light' || id === 'rim-light' || id === 'ground-plane') return;
       setObjects(prev => prev.filter(o => o.id !== id));
       if (selectedId === id) setSelectedId(null);
   };
@@ -722,7 +723,6 @@ const App = () => {
         onClose={() => setShowAssets(false)} 
         width={300} 
         height={420}
-        onOpenProjectSettings={() => setShowProjectSettings(true)}
       >
          <AssetsPanel 
             onAddObject={handleAddObject} 
@@ -755,6 +755,7 @@ const App = () => {
         copiedKeyframeYaml={copiedKeyframeYaml}
         onCopyKeyframeAsYaml={handleCopySelectedKeyframeValuesAsYaml}
         onPasteKeyframeFromYaml={handlePasteValuesToSelectedKeyframeFromYaml}
+        onOpenProjectSettings={() => setShowProjectSettings(true)}
       >
         <PropertiesPanel
             selectedObject={selectedObject}

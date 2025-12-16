@@ -18,7 +18,6 @@ export const createYamlString = (settingsData: GlobalSettings, objectsData: Scen
       backgroundColor: settingsData.backgroundColor,
       aspectRatio: settingsData.aspectRatio,
       showLightHelpers: settingsData.showLightHelpers,
-      ground: { show: settingsData.showGround, color: settingsData.groundColor },
       grid: { show: settingsData.showGrid },
       lighting: {
         ambient: settingsData.ambientLight,
@@ -39,13 +38,16 @@ export const createYamlString = (settingsData: GlobalSettings, objectsData: Scen
         url, width, height, color, opacity,
         metalness, roughness, transmission, ior, thickness, clearcoat, clearcoatRoughness,
         extrusion, pathLength, curvature,
-        volume, loop, chromaKey, fov
+        volume, loop, chromaKey, fov,
+        locked, visible
       } = obj;
       
       const objectYaml: any = {
         id,
         name: name || `Unnamed ${type}`,
         type,
+        locked: locked ? true : undefined,
+        visible: visible === false ? false : undefined,
         timing: { start: startTime, duration },
         transform: {
           position: { x: position[0], y: position[1], z: position[2] },
@@ -94,6 +96,7 @@ export const createYamlString = (settingsData: GlobalSettings, objectsData: Scen
 # id:             A unique identifier for the object.
 # name:           The friendly name you see in the editor.
 # type:           What kind of object it is (mesh, video, camera, etc.).
+# locked/visible: Special states for the object in the editor.
 # timing:         When it appears (start) and for how long (duration), in seconds.
 # transform:      Its initial position, rotation, and scale.
 # appearance:     How it looks (color, opacity).

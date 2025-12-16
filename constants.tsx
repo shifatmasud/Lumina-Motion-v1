@@ -1,3 +1,4 @@
+
 import { DesignSystem } from './theme';
 import { SceneObject, GlobalSettings, TransitionEffect } from './engine';
 
@@ -40,6 +41,24 @@ export const INITIAL_OBJECTS: SceneObject[] = [
       outroTransition: { ...defaultTransition },
       fov: 60,
       wireframe: false,
+    },
+    {
+      id: 'ground-plane',
+      type: 'mesh',
+      name: 'Ground',
+      locked: true,
+      visible: true,
+      position: [0, -0.05, 0],
+      rotation: [0, 0, 0],
+      scale: [3, 0.1, 3],
+      color: '#050505',
+      metalness: 0,
+      roughness: 0.8,
+      startTime: 0,
+      duration: 5,
+      animations: [],
+      introTransition: { ...defaultTransition },
+      outroTransition: { ...defaultTransition },
     },
     { 
       id: '1', 
@@ -99,9 +118,7 @@ export const INITIAL_GLOBAL_SETTINGS: GlobalSettings = {
     vignette: { enabled: false, offset: 1.0, darkness: 1.0 },
     accentColor: DEFAULT_ACCENT_COLOR,
     showGrid: true,
-    showGround: true,
     showLightHelpers: false,
-    groundColor: '#050505',
     ambientLight: { color: '#ffffff', intensity: 0.4 },
     mainLight: { color: '#ffffff', intensity: 1.2, position: [5, 10, 7] }, // Kept for type safety, but will be unused
     rimLight: { enabled: true, color: DEFAULT_ACCENT_COLOR, intensity: 5.0, position: [0, 0, 1] }, // Kept for type safety, but will be unused

@@ -1,9 +1,10 @@
+
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, Reorder, AnimatePresence, useDragControls, useMotionValue, useTransform } from 'framer-motion';
 import { v4 as uuidv4 } from 'uuid';
 import gsap from 'gsap';
-import { Play, Pause, Diamond, DotsSixVertical, DotsThreeVertical, Scissors, Copy, Trash, Camera as CameraIcon, ArrowCounterClockwise, SpeakerHigh, Cube, PencilSimple, ClipboardText, MagicWand, Lightbulb, WaveSine } from '@phosphor-icons/react';
+import { Play, Pause, Diamond, DotsSixVertical, DotsThreeVertical, Scissors, Copy, Trash, Camera as CameraIcon, ArrowCounterClockwise, SpeakerHigh, Cube, PencilSimple, ClipboardText, MagicWand, Lightbulb, WaveSine, Eye, EyeSlash } from '@phosphor-icons/react';
 import { DesignSystem } from '../../theme';
 import { SceneObject, TimelineKeyframe } from '../../engine';
 import { Button } from '../Core/Primitives';
@@ -108,13 +109,15 @@ const TrackContextMenu: React.FC<{
   onDuplicate: () => void;
   onRename: () => void;
   onResetCamera?: () => void;
+  onUpdateObject: (id: string, updates: Partial<SceneObject>) => void;
   onCopyAllKeyframes: () => void;
   onPasteAllKeyframes: () => void;
   copiedKeyframeYaml: string | null;
-}> = ({ rect, trackObject, onClose, onRemove, onSplit, onDuplicate, onRename, onResetCamera, onCopyAllKeyframes, onPasteAllKeyframes, copiedKeyframeYaml }) => {
-  const isLocked = trackObject.type === 'camera' || trackObject.type === 'light';
+}> = ({ rect, trackObject, onClose, onRemove, onSplit, onDuplicate, onRename, onResetCamera, onUpdateObject, onCopyAllKeyframes, onPasteAllKeyframes, copiedKeyframeYaml }) => {
+  const isLocked = trackObject.locked || trackObject.type === 'camera' || trackObject.type === 'light';
   
   const menuActions = [
+      { label: trackObject.visible !== false ? 'Hide Track' : 'Show Track', icon: trackObject.visible !== false ? <EyeSlash /> : <Eye />, action: () => onUpdateObject(trackObject.id, { visible: !(trackObject.visible !== false) }), disabled: false, danger: false },
       ...(onResetCamera ? [{ label: 'Reset Camera', icon: <ArrowCounterClockwise />, action: onResetCamera, danger: false, disabled: false }] : []),
       { label: 'Rename', icon: <PencilSimple />, action: onRename, disabled: false },
       { label: 'Split Clip', icon: <Scissors />, action: onSplit, disabled: isLocked },
@@ -158,7 +161,9 @@ const TrackContextMenu: React.FC<{
         }}
       >
         {menuActions.map((item, i) => (
-            <div key={i} 
+            <React.Fragment key={i}>
+            {i === 1 && <div style={{height: '1px', background: DesignSystem.Color.Base.Border[1], margin: '4px 6px'}} />}
+            <div
                 onClick={() => { if (!item.disabled) { item.action(); onClose(); } }}
                 style={{ 
                     padding: '8px 12px', 
@@ -181,6 +186,7 @@ const TrackContextMenu: React.FC<{
             >
                 {item.icon} {item.label}
             </div>
+            </React.Fragment>
         ))}
         <div style={{height: '1px', background: DesignSystem.Color.Base.Border[1], margin: '4px 6px'}} />
         {keyframeActions.map((item, i) => (
@@ -237,7 +243,7 @@ const TimelineItem: React.FC<{
   const [isEditingName, setIsEditingName] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const isLocked = obj.type === 'camera' || obj.type === 'light';
+  const isLocked = obj.locked || obj.type === 'camera' || obj.type === 'light';
 
   const handleMenuClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -285,7 +291,7 @@ const TimelineItem: React.FC<{
         value={obj} 
         id={obj.id}
         style={{ listStyle: 'none', position: 'relative', width: '100%', height: '48px' }}
-        dragListener={false}
+        dragListener={isLocked ? false : undefined}
         dragControls={dragControls}
     >
       <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '100%', display: 'flex' }}>
@@ -370,7 +376,7 @@ const TimelineItem: React.FC<{
                      )}
                      {!isEditingName && (
                         <span style={{ fontSize: '9px', fontFamily: DesignSystem.Type.Label.S.fontFamily, color: DesignSystem.Color.Base.Content[3] }}>
-                            {obj.id === 'camera-main' || obj.type === 'light' ? 'LOCKED' : `CH ${obj.id.slice(0, 3)}`}
+                            {obj.locked ? 'LOCKED' : `CH ${obj.id.slice(0, 3)}`}
                         </span>
                      )}
                 </div>
@@ -532,6 +538,7 @@ const TimelineItem: React.FC<{
                   onDuplicate={() => onDuplicate(obj.id)}
                   onRename={startRenaming}
                   onResetCamera={obj.type === 'camera' ? handleResetCamera : undefined}
+                  onUpdateObject={onUpdateObject}
                   onCopyAllKeyframes={() => onCopyAllKeyframesAsYaml(obj.id)}
                   onPasteAllKeyframes={() => onPasteAllKeyframesFromYaml(obj.id)}
                   copiedKeyframeYaml={copiedKeyframeYaml}
@@ -565,7 +572,7 @@ export const TimelineSequencer: React.FC<TimelineProps> = ({
   }, [currentTime, motionCurrentTime]);
   
   const handleRemoveObject = (id: string) => {
-    setObjects(prev => prev.filter(obj => obj.id !== id));
+    setObjects(prev => prev.filter(obj => obj.id !== id && !obj.locked));
   };
   
   const handleUpdateObject = (id: string, updates: Partial<SceneObject>) => {
