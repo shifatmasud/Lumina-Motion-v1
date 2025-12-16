@@ -20,6 +20,7 @@
     "js-yaml": "https://esm.sh/js-yaml@4.1.0",
     "jszip": "https://esm.sh/jszip@3.10.1",
     "webm-writer": "https://esm.sh/webm-writer@0.3.0",
-    "lottie-web": "https://esm.sh/lottie-web@5.12.2"
+    "lottie-web": "https://esm.sh/lottie-web@5.12.2",
+    "cannon-es": "https://esm.sh/cannon-es@0.20.0"
   }
 }

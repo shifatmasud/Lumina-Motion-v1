@@ -19,7 +19,8 @@
     "js-yaml": "^4.1.1",
     "jszip": "^3.10.1",
     "webm-writer": "^1.0.0",
-    "lottie-web": "^5.13.0"
+    "lottie-web": "^5.13.0",
+    "cannon-es": "^0.20.0"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

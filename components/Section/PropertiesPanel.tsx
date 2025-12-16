@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Trash,
@@ -16,13 +16,18 @@ import {
   Lock,
   LockOpen,
   Palette,
-  SpeakerHigh
+  SpeakerHigh,
+  Lightning,
+  ShootingStar,
+  Clock,
+  ArrowRight
 } from '@phosphor-icons/react';
 import { DesignSystem } from '../../theme';
 import { GlobalSettings, SceneObject, TimelineKeyframe } from '../../engine';
 import { Button, Input, Slider, Toggle, Divider, Group, Select, PropSlider } from '../Core/Primitives';
 import { TransitionControls } from '../Package/TransitionControls';
 import { materialPresets, ACCENT_COLORS, EASING_OPTIONS } from '../../constants';
+import { generatePhysicsKeyframes } from '../../utils/physics';
 
 interface PropertiesPanelProps {
     selectedObject: SceneObject | undefined;
@@ -48,6 +53,17 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
     handleKeyframePropertyChange, handleRemoveKeyframe, handleLightSettingChange,
     setGlobalSettings, setAccentColor, setIsScaleLocked,
 }) => {
+    // --- Physics State ---
+    const [physicsSettings, setPhysicsSettings] = useState({
+        duration: 2.0,
+        fps: 30,
+        mass: 1.0,
+        bounciness: 0.5,
+        friction: 0.3,
+        velocity: [0, 0, 0] as [number, number, number],
+        gravity: -9.81,
+        simplification: 25,
+    });
 
     const handlePresetChange = (presetKey: string) => {
       if (!selectedObject?.id || !materialPresets[presetKey]) return;
@@ -60,6 +76,47 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
     };
     
     const selectedKeyframeData = getSelectedKeyframeData();
+
+    const handleGeneratePhysics = () => {
+        if (!selectedKeyframe || !selectedObject || !selectedKeyframeData) return;
+
+        const initialPosition = getControlValue('position') as [number, number, number];
+        const initialRotation = getControlValue('rotation') as [number, number, number];
+        const scale = getControlValue('scale') as [number, number, number];
+
+        const newKeyframes = generatePhysicsKeyframes({
+            ...physicsSettings,
+            initialPosition,
+            initialRotation,
+            scale,
+        });
+
+        const startKfTime = selectedKeyframeData.time;
+        
+        const cleanAnimations = selectedObject.animations.filter(kf => 
+            kf.time <= startKfTime || kf.time > startKfTime + physicsSettings.duration
+        );
+
+        const shiftedNewKeyframes = newKeyframes.map(kf => ({
+            ...kf,
+            time: Number((startKfTime + kf.time).toFixed(3))
+        }));
+
+        const finalAnimations = [...cleanAnimations, ...shiftedNewKeyframes].sort((a, b) => a.time - b.time);
+
+        handleUpdateObject(selectedObject.id, { animations: finalAnimations });
+    };
+
+    const updatePhysics = (key: string, val: any, axis?: number) => {
+        setPhysicsSettings(prev => {
+            if (axis !== undefined && Array.isArray(prev.velocity)) {
+                const newVel = [...prev.velocity] as [number, number, number];
+                newVel[axis] = val;
+                return { ...prev, velocity: newVel };
+            }
+            return { ...prev, [key]: val };
+        });
+    };
 
     if (selectedObject) {
         const isCoreObject = selectedObject.type === 'camera' || selectedObject.type === 'light';
@@ -90,7 +147,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                 <fieldset disabled={selectedObject.locked} style={{ border: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: DesignSystem.Space(3), opacity: selectedObject.locked ? 0.4 : 1, transition: 'opacity 0.2s' }}>
                     <AnimatePresence>
                     {selectedKeyframe?.id === selectedObject.id && selectedKeyframeData && (
-                        <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} style={{ overflow: 'hidden' }}>
+                        <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} style={{ overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: DesignSystem.Space(3) }}>
                            <Group title="KEYFRAME" icon={<Diamond weight="fill" />}>
                                <Input
                                     label="KEYFRAME NAME"
@@ -112,6 +169,41 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                                >
                                     <Trash size={14} weight="bold" /> REMOVE KEYFRAME
                                </Button>
+                           </Group>
+
+                           {/* Physics Generator Tool */}
+                           <Group title="PHYSICS GENERATOR" icon={<Lightning weight="fill" />}>
+                                <div style={{ fontSize: '11px', color: DesignSystem.Color.Base.Content[2], marginBottom: '8px', lineHeight: '1.4' }}>
+                                    Simulate physics starting from this keyframe. Generates new keyframes for the duration.
+                                </div>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: DesignSystem.Space(2) }}>
+                                    <Input label="DURATION (S)" type="number" step="0.1" value={physicsSettings.duration} onChange={e => updatePhysics('duration', parseFloat(e.target.value))} />
+                                    <Input label="FPS" type="number" step="10" value={physicsSettings.fps} onChange={e => updatePhysics('fps', parseInt(e.target.value))} />
+                                </div>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: DesignSystem.Space(2) }}>
+                                    <Input label="MASS (KG)" type="number" step="0.1" value={physicsSettings.mass} onChange={e => updatePhysics('mass', parseFloat(e.target.value))} />
+                                    <Input label="BOUNCE" type="number" step="0.1" min="0" max="1" value={physicsSettings.bounciness} onChange={e => updatePhysics('bounciness', parseFloat(e.target.value))} />
+                                </div>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: DesignSystem.Space(2) }}>
+                                    <Input label="VEL X" type="number" value={physicsSettings.velocity[0]} onChange={e => updatePhysics('velocity', parseFloat(e.target.value), 0)} />
+                                    <Input label="VEL Y" type="number" value={physicsSettings.velocity[1]} onChange={e => updatePhysics('velocity', parseFloat(e.target.value), 1)} />
+                                    <Input label="VEL Z" type="number" value={physicsSettings.velocity[2]} onChange={e => updatePhysics('velocity', parseFloat(e.target.value), 2)} />
+                                </div>
+                                <Divider />
+                                <Slider 
+                                    label="KEYFRAME DETAIL" 
+                                    value={physicsSettings.simplification} 
+                                    onChange={v => updatePhysics('simplification', v)} 
+                                    min={1} 
+                                    max={100} 
+                                    step={1} 
+                                />
+                                 <div style={{ fontSize: '10px', color: DesignSystem.Color.Base.Content[3], marginTop: '-4px', textAlign: 'center', lineHeight: '1.3' }}>
+                                    Lower values create fewer, more editable keyframes. 100 provides a full frame-by-frame bake.
+                                </div>
+                                <Button onClick={handleGeneratePhysics} variant="primary" style={{ marginTop: '8px' }}>
+                                    <ShootingStar size={16} weight="fill" /> BAKE PHYSICS
+                                </Button>
                            </Group>
                         </motion.div>
                     )}
