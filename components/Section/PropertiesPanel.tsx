@@ -1,14 +1,13 @@
 
-import React, { useState } from 'react';
+
+import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Trash,
   FilmStrip, 
   VideoCamera,
-  Sparkle,
   PaintBrush,
   ToggleLeft,
-  CaretDown,
   Diamond,
   Cylinder,
   Eye,
@@ -17,23 +16,17 @@ import {
   LockOpen,
   Palette,
   SpeakerHigh,
-  Lightning,
-  ShootingStar,
-  Clock,
-  ArrowRight
+  Atom,
 } from '@phosphor-icons/react';
 import { DesignSystem } from '../../theme';
-import { GlobalSettings, SceneObject, TimelineKeyframe } from '../../engine';
+import { SceneObject, TimelineKeyframe } from '../../engine';
 import { Button, Input, Slider, Toggle, Divider, Group, Select, PropSlider } from '../Core/Primitives';
 import { TransitionControls } from '../Package/TransitionControls';
-import { materialPresets, ACCENT_COLORS, EASING_OPTIONS } from '../../constants';
-import { generatePhysicsKeyframes } from '../../utils/physics';
+import { materialPresets, EASING_OPTIONS } from '../../constants';
 
 interface PropertiesPanelProps {
     selectedObject: SceneObject | undefined;
     selectedKeyframe: { id: string, index: number } | null;
-    globalSettings: GlobalSettings;
-    accentColor: string;
     isScaleLocked: boolean;
     getControlValue: (property: string, axis?: number) => any;
     handleControlChange: (property: string, value: any, axis?: number) => void;
@@ -41,30 +34,15 @@ interface PropertiesPanelProps {
     handleRemoveObject: (id: string) => void;
     handleKeyframePropertyChange: (property: keyof TimelineKeyframe, value: any) => void;
     handleRemoveKeyframe: () => void;
-    handleLightSettingChange: (light: 'ambientLight', property: string, value: any) => void;
-    setGlobalSettings: React.Dispatch<React.SetStateAction<GlobalSettings>>;
-    setAccentColor: React.Dispatch<React.SetStateAction<string>>;
     setIsScaleLocked: React.Dispatch<React.SetStateAction<boolean>>;
 }
 
 export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
-    selectedObject, selectedKeyframe, globalSettings, accentColor, isScaleLocked,
+    selectedObject, selectedKeyframe, isScaleLocked,
     getControlValue, handleControlChange, handleUpdateObject, handleRemoveObject,
-    handleKeyframePropertyChange, handleRemoveKeyframe, handleLightSettingChange,
-    setGlobalSettings, setAccentColor, setIsScaleLocked,
+    handleKeyframePropertyChange, handleRemoveKeyframe,
+    setIsScaleLocked
 }) => {
-    // --- Physics State ---
-    const [physicsSettings, setPhysicsSettings] = useState({
-        duration: 2.0,
-        fps: 30,
-        mass: 1.0,
-        bounciness: 0.5,
-        friction: 0.3,
-        velocity: [0, 0, 0] as [number, number, number],
-        gravity: -9.81,
-        simplification: 25,
-    });
-
     const handlePresetChange = (presetKey: string) => {
       if (!selectedObject?.id || !materialPresets[presetKey]) return;
       handleUpdateObject(selectedObject.id, materialPresets[presetKey]);
@@ -77,44 +55,30 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
     
     const selectedKeyframeData = getSelectedKeyframeData();
 
-    const handleGeneratePhysics = () => {
-        if (!selectedKeyframe || !selectedObject || !selectedKeyframeData) return;
+    const canHavePhysics = selectedObject && ['mesh', 'plane', 'video', 'glb', 'svg'].includes(selectedObject.type);
+    const physicsProps = selectedObject?.physics || { enabled: false, type: 'dynamic', mass: 1, friction: 0.3, restitution: 0.5, force: { preset: 'none', strength: 20 } };
+    const forceProps = physicsProps.force || { preset: 'none', strength: 20 };
 
-        const initialPosition = getControlValue('position') as [number, number, number];
-        const initialRotation = getControlValue('rotation') as [number, number, number];
-        const scale = getControlValue('scale') as [number, number, number];
-
-        const newKeyframes = generatePhysicsKeyframes({
-            ...physicsSettings,
-            initialPosition,
-            initialRotation,
-            scale,
+    const handlePhysicsPropChange = (prop: string, value: any) => {
+        if (!selectedObject) return;
+        handleUpdateObject(selectedObject.id, {
+            physics: {
+                ...physicsProps,
+                [prop]: value,
+            },
         });
-
-        const startKfTime = selectedKeyframeData.time;
-        
-        const cleanAnimations = selectedObject.animations.filter(kf => 
-            kf.time <= startKfTime || kf.time > startKfTime + physicsSettings.duration
-        );
-
-        const shiftedNewKeyframes = newKeyframes.map(kf => ({
-            ...kf,
-            time: Number((startKfTime + kf.time).toFixed(3))
-        }));
-
-        const finalAnimations = [...cleanAnimations, ...shiftedNewKeyframes].sort((a, b) => a.time - b.time);
-
-        handleUpdateObject(selectedObject.id, { animations: finalAnimations });
     };
-
-    const updatePhysics = (key: string, val: any, axis?: number) => {
-        setPhysicsSettings(prev => {
-            if (axis !== undefined && Array.isArray(prev.velocity)) {
-                const newVel = [...prev.velocity] as [number, number, number];
-                newVel[axis] = val;
-                return { ...prev, velocity: newVel };
-            }
-            return { ...prev, [key]: val };
+    
+    const handlePhysicsForcePropChange = (prop: string, value: any) => {
+        if (!selectedObject) return;
+        handleUpdateObject(selectedObject.id, {
+            physics: {
+                ...physicsProps,
+                force: {
+                    ...forceProps,
+                    [prop]: value,
+                }
+            },
         });
     };
 
@@ -169,41 +133,6 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                                >
                                     <Trash size={14} weight="bold" /> REMOVE KEYFRAME
                                </Button>
-                           </Group>
-
-                           {/* Physics Generator Tool */}
-                           <Group title="PHYSICS GENERATOR" icon={<Lightning weight="fill" />}>
-                                <div style={{ fontSize: '11px', color: DesignSystem.Color.Base.Content[2], marginBottom: '8px', lineHeight: '1.4' }}>
-                                    Simulate physics starting from this keyframe. Generates new keyframes for the duration.
-                                </div>
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: DesignSystem.Space(2) }}>
-                                    <Input label="DURATION (S)" type="number" step="0.1" value={physicsSettings.duration} onChange={e => updatePhysics('duration', parseFloat(e.target.value))} />
-                                    <Input label="FPS" type="number" step="10" value={physicsSettings.fps} onChange={e => updatePhysics('fps', parseInt(e.target.value))} />
-                                </div>
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: DesignSystem.Space(2) }}>
-                                    <Input label="MASS (KG)" type="number" step="0.1" value={physicsSettings.mass} onChange={e => updatePhysics('mass', parseFloat(e.target.value))} />
-                                    <Input label="BOUNCE" type="number" step="0.1" min="0" max="1" value={physicsSettings.bounciness} onChange={e => updatePhysics('bounciness', parseFloat(e.target.value))} />
-                                </div>
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: DesignSystem.Space(2) }}>
-                                    <Input label="VEL X" type="number" value={physicsSettings.velocity[0]} onChange={e => updatePhysics('velocity', parseFloat(e.target.value), 0)} />
-                                    <Input label="VEL Y" type="number" value={physicsSettings.velocity[1]} onChange={e => updatePhysics('velocity', parseFloat(e.target.value), 1)} />
-                                    <Input label="VEL Z" type="number" value={physicsSettings.velocity[2]} onChange={e => updatePhysics('velocity', parseFloat(e.target.value), 2)} />
-                                </div>
-                                <Divider />
-                                <Slider 
-                                    label="KEYFRAME DETAIL" 
-                                    value={physicsSettings.simplification} 
-                                    onChange={v => updatePhysics('simplification', v)} 
-                                    min={1} 
-                                    max={100} 
-                                    step={1} 
-                                />
-                                 <div style={{ fontSize: '10px', color: DesignSystem.Color.Base.Content[3], marginTop: '-4px', textAlign: 'center', lineHeight: '1.3' }}>
-                                    Lower values create fewer, more editable keyframes. 100 provides a full frame-by-frame bake.
-                                </div>
-                                <Button onClick={handleGeneratePhysics} variant="primary" style={{ marginTop: '8px' }}>
-                                    <ShootingStar size={16} weight="fill" /> BAKE PHYSICS
-                                </Button>
                            </Group>
                         </motion.div>
                     )}
@@ -295,6 +224,44 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                           <AnimatePresence> {getControlValue('clearcoat') > 0 && ( <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} style={{ overflow: 'hidden' }}> <PropSlider label="ROUGHNESS" value={getControlValue('clearcoatRoughness')} onChange={v => handleControlChange('clearcoatRoughness', v)} min={0} max={1} step={0.01} isMode={selectedKeyframe?.id === selectedObject.id} /> </motion.div> )} </AnimatePresence>
                         </Group>
                     )}
+
+                    {canHavePhysics && (
+                        <Group title="PHYSICS PROPERTIES" icon={<Atom weight="fill" />}>
+                            <Toggle label="ENABLE PHYSICS" value={physicsProps.enabled} onChange={v => handlePhysicsPropChange('enabled', v)} />
+                            <AnimatePresence>
+                                {physicsProps.enabled && (
+                                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} style={{ overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: DesignSystem.Space(3), paddingTop: DesignSystem.Space(2) }}>
+                                    <Select label="TYPE" value={physicsProps.type} onChange={e => handlePhysicsPropChange('type', e.target.value)}>
+                                        <option value="dynamic">Dynamic</option>
+                                        <option value="static">Static</option>
+                                    </Select>
+                                    <Slider label="MASS (KG)" value={physicsProps.mass} onChange={v => handlePhysicsPropChange('mass', v)} min={0} max={10} step={0.1} />
+                                    <Slider label="FRICTION" value={physicsProps.friction} onChange={v => handlePhysicsPropChange('friction', v)} min={0} max={1} step={0.05} />
+                                    <Slider label="BOUNCINESS" value={physicsProps.restitution} onChange={v => handlePhysicsPropChange('restitution', v)} min={0} max={1} step={0.05} />
+                                    <Divider />
+                                    <Select label="FORCE PRESET" value={forceProps.preset} onChange={e => handlePhysicsForcePropChange('preset', e.target.value)}>
+                                        <option value="none">None</option>
+                                        <option value="push_up">Push Up</option>
+                                        <option value="push_down">Push Down</option>
+                                        <option value="push_forward">Push Forward</option>
+                                        <option value="push_backward">Push Backward</option>
+                                        <option value="pull_center">Pull to Center</option>
+                                        <option value="push_from_center">Push from Center</option>
+                                        <option value="pull_in_source">Pull In (Source)</option>
+                                        <option value="push_out_source">Push Out (Source)</option>
+                                    </Select>
+                                    <AnimatePresence>
+                                        {forceProps.preset !== 'none' && (
+                                            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} style={{ overflow: 'hidden', paddingTop: DesignSystem.Space(2) }}>
+                                                <Slider label="FORCE STRENGTH" value={forceProps.strength} onChange={v => handlePhysicsForcePropChange('strength', v)} min={0} max={100} step={1} />
+                                            </motion.div>
+                                        )}
+                                    </AnimatePresence>
+                                </motion.div>
+                                )}
+                            </AnimatePresence>
+                        </Group>
+                    )}
     
                     {(selectedObject.type === 'audio' || selectedObject.type === 'video') && ( <Group title="AUDIO" icon={<SpeakerHigh />}> <PropSlider label="VOLUME" value={getControlValue('volume')} onChange={(v: number) => handleControlChange('volume', v)} isMode={selectedKeyframe?.id === selectedObject.id} min={0} max={1} step={0.05} /> </Group> )}
     
@@ -338,67 +305,10 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
     }
     
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: DesignSystem.Space(4) }}>
-            <Group title="SCENE" icon={<PaintBrush weight="fill"/>}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                    <label style={{ ...DesignSystem.Type.Label.S, color: DesignSystem.Color.Base.Content[2] }}>BACKGROUND COLOR</label>
-                    <div style={{ display: 'flex', gap: DesignSystem.Space(2), alignItems: 'center' }}>
-                        <div style={{ width: '32px', height: '32px', borderRadius: '8px', overflow: 'hidden', border: `1px solid ${DesignSystem.Color.Base.Border[2]}`, flexShrink: 0 }}>
-                            <input type="color" value={globalSettings.backgroundColor} onChange={(e) => setGlobalSettings(g => ({ ...g, backgroundColor: e.target.value }))} style={{ width: '150%', height: '150%', margin: '-25%', padding: 0, border: 'none', cursor: 'pointer' }} />
-                        </div>
-                        <Input type="text" value={globalSettings.backgroundColor} onChange={(e) => setGlobalSettings(g => ({ ...g, backgroundColor: e.target.value }))} style={{ flex: 1 }} />
-                    </div>
-                </div>
-                
-                <Toggle label="SHOW GRID" value={globalSettings.showGrid} onChange={(v) => setGlobalSettings(g => ({ ...g, showGrid: v }))} />
-                <Toggle label="SHOW LIGHT HELPERS" value={globalSettings.showLightHelpers} onChange={(v) => setGlobalSettings(g => ({ ...g, showLightHelpers: v }))} />
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                    <span style={DesignSystem.Type.Label.S}>ACCENT COLOR</span>
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                         <div style={{ position: 'relative', width: '100%' }}>
-                            <select value={accentColor} onChange={(e) => setAccentColor(e.target.value)} style={{ appearance: 'none', width: '100%', background: DesignSystem.Color.Base.Surface[3], border: 'none', padding: '8px 12px', color: DesignSystem.Color.Base.Content[1], borderRadius: DesignSystem.Effect.Radius.S, fontFamily: DesignSystem.Type.Label.S.fontFamily, fontSize: '12px', cursor: 'pointer' }}>
-                                {ACCENT_COLORS.map(c => ( <option key={c} value={c}>{c}</option> ))}
-                            </select>
-                            <div style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', display: 'flex', gap: '4px' }}>
-                                <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: accentColor }} />
-                                <CaretDown size={14} color={DesignSystem.Color.Base.Content[3]} />
-                            </div>
-                         </div>
-                    </div>
-                </div>
-                <Divider />
-                <div>
-                    <span style={{ ...DesignSystem.Type.Label.S, color: DesignSystem.Color.Base.Content[2], display: 'block', marginBottom: DesignSystem.Space(2) }}>AMBIENT LIGHT</span>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: DesignSystem.Space(2)}}>
-                        <Input label="COLOR" type="color" value={globalSettings.ambientLight.color} onChange={e => handleLightSettingChange('ambientLight', 'color', e.target.value)} />
-                        <Slider label="INTENSITY" value={globalSettings.ambientLight.intensity} min={0} max={2} step={0.01} onChange={v => handleLightSettingChange('ambientLight', 'intensity', v)} />
-                    </div>
-                </div>
-            </Group>
-            
-            <Group title="EFFECTS" icon={<Sparkle weight="fill"/>}>
-                <Toggle label="BLOOM" value={globalSettings.bloom.enabled} onChange={(v) => setGlobalSettings(g => ({ ...g, bloom: { ...g.bloom, enabled: v } }))} />
-                 <AnimatePresence>
-                    {globalSettings.bloom.enabled && (
-                         <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} style={{ display: 'flex', flexDirection: 'column', gap: DesignSystem.Space(2), overflow: 'hidden', marginTop: DesignSystem.Space(2) }}>
-                             <Slider label="STRENGTH" value={globalSettings.bloom.strength} min={0} max={2} step={0.01} onChange={v => setGlobalSettings(g => ({ ...g, bloom: { ...g.bloom, strength: v } }))}/>
-                             <Slider label="THRESHOLD" value={globalSettings.bloom.threshold} min={0} max={1} step={0.01} onChange={v => setGlobalSettings(g => ({ ...g, bloom: { ...g.bloom, threshold: v } }))}/>
-                             <Slider label="RADIUS" value={globalSettings.bloom.radius} min={0} max={2} step={0.01} onChange={v => setGlobalSettings(g => ({ ...g, bloom: { ...g.bloom, radius: v } }))}/>
-                        </motion.div>
-                    )}
-                 </AnimatePresence>
-                 <Divider />
-                 <Toggle label="VIGNETTE" value={globalSettings.vignette.enabled} onChange={(v) => setGlobalSettings(g => ({ ...g, vignette: { ...g.vignette, enabled: v } }))} />
-                 <AnimatePresence>
-                    {globalSettings.vignette.enabled && (
-                         <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} style={{ display: 'flex', flexDirection: 'column', gap: DesignSystem.Space(2), overflow: 'hidden', marginTop: DesignSystem.Space(2) }}>
-                            <Slider label="OFFSET" value={globalSettings.vignette.offset} min={0} max={2} step={0.01} onChange={v => setGlobalSettings(g => ({ ...g, vignette: { ...g.vignette, offset: v } }))}/>
-                            <Slider label="DARKNESS" value={globalSettings.vignette.darkness} min={0} max={2} step={0.01} onChange={v => setGlobalSettings(g => ({ ...g, vignette: { ...g.vignette, darkness: v } }))}/>
-                        </motion.div>
-                    )}
-                 </AnimatePresence>
-            </Group>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: DesignSystem.Color.Base.Content[3], textAlign: 'center', padding: DesignSystem.Space(4), gap: DesignSystem.Space(3) }}>
+            <PaintBrush size={32} weight="duotone" style={{ color: DesignSystem.Color.Base.Content[2] }} />
+            <span style={{...DesignSystem.Type.Label.M, color: DesignSystem.Color.Base.Content[1]}}>No Object Selected</span>
+            <p style={{...DesignSystem.Type.Body.M, maxWidth: '200px', lineHeight: '140%'}}>Select an object on the timeline or in the 3D view to edit its properties.</p>
         </div>
     );
 };

@@ -1,16 +1,21 @@
 
 import React from 'react';
-import { Group, Select, Divider } from '../Core/Primitives';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Group, Select, Divider, Input, Slider, Toggle } from '../Core/Primitives';
 import { GlobalSettings } from '../../engine';
 import { DesignSystem } from '../../theme';
-import { Monitor } from '@phosphor-icons/react';
+import { Monitor, Sparkle, PaintBrush, CaretDown } from '@phosphor-icons/react';
+import { ACCENT_COLORS } from '../../constants';
 
 interface ProjectSettingsPanelProps {
     settings: GlobalSettings;
     setSettings: React.Dispatch<React.SetStateAction<GlobalSettings>>;
+    accentColor: string;
+    setAccentColor: (color: string) => void;
+    handleLightSettingChange: (light: 'ambientLight', property: string, value: any) => void;
 }
 
-export const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({ settings, setSettings }) => {
+export const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({ settings, setSettings, accentColor, setAccentColor, handleLightSettingChange }) => {
     
     const getCurrentPreset = () => {
         const { pixelRatio, shadowMapSize } = settings.performance;
@@ -59,6 +64,67 @@ export const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({ sett
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: DesignSystem.Space(4), height: '100%' }}>
+            <Group title="SCENE" icon={<PaintBrush weight="fill"/>}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <label style={{ ...DesignSystem.Type.Label.S, color: DesignSystem.Color.Base.Content[2] }}>BACKGROUND COLOR</label>
+                    <div style={{ display: 'flex', gap: DesignSystem.Space(2), alignItems: 'center' }}>
+                        <div style={{ width: '32px', height: '32px', borderRadius: '8px', overflow: 'hidden', border: `1px solid ${DesignSystem.Color.Base.Border[2]}`, flexShrink: 0 }}>
+                            <input type="color" value={settings.backgroundColor} onChange={(e) => setSettings(g => ({ ...g, backgroundColor: e.target.value }))} style={{ width: '150%', height: '150%', margin: '-25%', padding: 0, border: 'none', cursor: 'pointer' }} />
+                        </div>
+                        <Input type="text" value={settings.backgroundColor} onChange={(e) => setSettings(g => ({ ...g, backgroundColor: e.target.value }))} style={{ flex: 1 }} />
+                    </div>
+                </div>
+                
+                <Toggle label="SHOW GRID" value={settings.showGrid} onChange={(v) => setSettings(g => ({ ...g, showGrid: v }))} />
+                <Toggle label="SHOW LIGHT HELPERS" value={settings.showLightHelpers} onChange={(v) => setSettings(g => ({ ...g, showLightHelpers: v }))} />
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <span style={DesignSystem.Type.Label.S}>ACCENT COLOR</span>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                         <div style={{ position: 'relative', width: '100%' }}>
+                            <select value={accentColor} onChange={(e) => setAccentColor(e.target.value)} style={{ appearance: 'none', width: '100%', background: DesignSystem.Color.Base.Surface[3], border: 'none', padding: '8px 12px', color: DesignSystem.Color.Base.Content[1], borderRadius: DesignSystem.Effect.Radius.S, fontFamily: DesignSystem.Type.Label.S.fontFamily, fontSize: '12px', cursor: 'pointer' }}>
+                                {ACCENT_COLORS.map(c => ( <option key={c} value={c}>{c}</option> ))}
+                            </select>
+                            <div style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', display: 'flex', gap: '4px', alignItems: 'center' }}>
+                                <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: accentColor }} />
+                                <CaretDown size={14} color={DesignSystem.Color.Base.Content[3]} />
+                            </div>
+                         </div>
+                    </div>
+                </div>
+                <Divider />
+                <div>
+                    <span style={{ ...DesignSystem.Type.Label.S, color: DesignSystem.Color.Base.Content[2], display: 'block', marginBottom: DesignSystem.Space(2) }}>AMBIENT LIGHT</span>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: DesignSystem.Space(2)}}>
+                        <Input label="COLOR" type="color" value={settings.ambientLight.color} onChange={e => handleLightSettingChange('ambientLight', 'color', e.target.value)} />
+                        <Slider label="INTENSITY" value={settings.ambientLight.intensity} min={0} max={2} step={0.01} onChange={v => handleLightSettingChange('ambientLight', 'intensity', v)} />
+                    </div>
+                </div>
+            </Group>
+            
+            <Group title="EFFECTS" icon={<Sparkle weight="fill"/>}>
+                <Toggle label="BLOOM" value={settings.bloom.enabled} onChange={(v) => setSettings(g => ({ ...g, bloom: { ...g.bloom, enabled: v } }))} />
+                 <AnimatePresence>
+                    {settings.bloom.enabled && (
+                         <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} style={{ display: 'flex', flexDirection: 'column', gap: DesignSystem.Space(2), overflow: 'hidden', marginTop: DesignSystem.Space(2) }}>
+                             <Slider label="STRENGTH" value={settings.bloom.strength} min={0} max={2} step={0.01} onChange={v => setSettings(g => ({ ...g, bloom: { ...g.bloom, strength: v } }))}/>
+                             <Slider label="THRESHOLD" value={settings.bloom.threshold} min={0} max={1} step={0.01} onChange={v => setSettings(g => ({ ...g, bloom: { ...g.bloom, threshold: v } }))}/>
+                             <Slider label="RADIUS" value={settings.bloom.radius} min={0} max={2} step={0.01} onChange={v => setSettings(g => ({ ...g, bloom: { ...g.bloom, radius: v } }))}/>
+                        </motion.div>
+                    )}
+                 </AnimatePresence>
+                 <Divider />
+                 <Toggle label="VIGNETTE" value={settings.vignette.enabled} onChange={(v) => setSettings(g => ({ ...g, vignette: { ...g.vignette, enabled: v } }))} />
+                 <AnimatePresence>
+                    {settings.vignette.enabled && (
+                         <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} style={{ display: 'flex', flexDirection: 'column', gap: DesignSystem.Space(2), overflow: 'hidden', marginTop: DesignSystem.Space(2) }}>
+                            <Slider label="OFFSET" value={settings.vignette.offset} min={0} max={2} step={0.01} onChange={v => setSettings(g => ({ ...g, vignette: { ...g.vignette, offset: v } }))}/>
+                            <Slider label="DARKNESS" value={settings.vignette.darkness} min={0} max={2} step={0.01} onChange={v => setSettings(g => ({ ...g, vignette: { ...g.vignette, darkness: v } }))}/>
+                        </motion.div>
+                    )}
+                 </AnimatePresence>
+            </Group>
+
              <Group title="VIEWPORT" icon={<Monitor />}>
                 <Select label="ASPECT RATIO" value={settings.aspectRatio} onChange={e => handleAspectRatioChange(e.target.value)}>
                     <option value="free">Free (Fill)</option>

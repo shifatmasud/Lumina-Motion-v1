@@ -21,6 +21,7 @@ interface WindowProps {
   onToggleSnapping?: () => void;
   onResetScene?: () => void;
   onOpenProjectSettings?: () => void;
+  onOpenPhysicsPanel?: () => void;
   selectedKeyframe?: { id: string, index: number } | null;
   copiedKeyframeYaml?: string | null;
   onCopyKeyframeAsYaml?: () => void;
@@ -36,12 +37,13 @@ const ContextMenu: React.FC<{
   onToggleSnapping?: () => void;
   onResetScene?: () => void;
   onOpenProjectSettings?: () => void;
+  onOpenPhysicsPanel?: () => void;
   selectedKeyframe?: { id: string, index: number } | null;
   copiedKeyframeYaml?: string | null;
   onCopyKeyframeAsYaml?: () => void;
   onPasteKeyframeFromYaml?: () => void;
 }> = ({ 
-    rect, onClose, windowId, isSnappingEnabled, onToggleSnapping, onResetScene, onOpenProjectSettings,
+    rect, onClose, windowId, isSnappingEnabled, onToggleSnapping, onResetScene, onOpenProjectSettings, onOpenPhysicsPanel,
     selectedKeyframe, copiedKeyframeYaml, onCopyKeyframeAsYaml, onPasteKeyframeFromYaml
 }) => {
   const handleItemClick = (action?: () => void) => {
@@ -122,16 +124,27 @@ const ContextMenu: React.FC<{
                 </div>
             </>
         )}
-        {windowId === 'props' && onOpenProjectSettings && (
+        {windowId === 'props' && (
              <>
              <div style={{height: '1px', background: DesignSystem.Color.Base.Border[1], margin: '4px 6px'}} />
-             <div 
-                 onClick={() => handleItemClick(onOpenProjectSettings)}
-                 style={menuItemStyle}
-                 onMouseEnter={menuItemHover} onMouseLeave={menuItemLeave}
-             >
-                 <Gear size={14} /> Project Settings
-             </div>
+              {onOpenProjectSettings && (
+                  <div 
+                      onClick={() => handleItemClick(onOpenProjectSettings)}
+                      style={menuItemStyle}
+                      onMouseEnter={menuItemHover} onMouseLeave={menuItemLeave}
+                  >
+                      <Gear size={14} /> Project Settings
+                  </div>
+              )}
+              {onOpenPhysicsPanel && (
+                  <div 
+                      onClick={() => handleItemClick(onOpenPhysicsPanel)}
+                      style={menuItemStyle}
+                      onMouseEnter={menuItemHover} onMouseLeave={menuItemLeave}
+                  >
+                      <MagicWand size={14} /> Physics Simulator
+                  </div>
+              )}
              </>
         )}
         {windowId === 'props' && onResetScene && (
@@ -187,6 +200,7 @@ export const Window: React.FC<WindowProps> = ({
   onToggleSnapping,
   onResetScene,
   onOpenProjectSettings,
+  onOpenPhysicsPanel,
   selectedKeyframe,
   copiedKeyframeYaml,
   onCopyKeyframeAsYaml,
@@ -383,6 +397,7 @@ export const Window: React.FC<WindowProps> = ({
               onToggleSnapping={onToggleSnapping}
               onResetScene={onResetScene}
               onOpenProjectSettings={onOpenProjectSettings}
+              onOpenPhysicsPanel={onOpenPhysicsPanel}
               selectedKeyframe={selectedKeyframe}
               copiedKeyframeYaml={copiedKeyframeYaml}
               onCopyKeyframeAsYaml={onCopyKeyframeAsYaml}

@@ -1,4 +1,3 @@
-
 import { DesignSystem } from './theme';
 import { SceneObject, GlobalSettings, TransitionEffect } from './engine';
 
@@ -50,7 +49,7 @@ export const INITIAL_OBJECTS: SceneObject[] = [
       visible: true,
       position: [0, -0.05, 0],
       rotation: [0, 0, 0],
-      scale: [3, 0.1, 3],
+      scale: [30, 0.1, 30],
       color: '#050505',
       metalness: 0,
       roughness: 0.8,
@@ -59,6 +58,7 @@ export const INITIAL_OBJECTS: SceneObject[] = [
       animations: [],
       introTransition: { ...defaultTransition },
       outroTransition: { ...defaultTransition },
+      physics: { enabled: true, type: 'static', mass: 0, friction: 0.5, restitution: 0.3 }
     },
     { 
       id: '1', 
@@ -75,6 +75,7 @@ export const INITIAL_OBJECTS: SceneObject[] = [
       introTransition: { ...defaultTransition },
       outroTransition: { ...defaultTransition },
       wireframe: false,
+      physics: { enabled: true, type: 'dynamic', mass: 1, friction: 0.3, restitution: 0.5, force: { preset: 'none', strength: 20 } }
     },
     {
       id: 'main-light',

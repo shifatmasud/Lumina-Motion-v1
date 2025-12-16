@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import { v4 as uuidv4 } from 'uuid';
@@ -15,8 +14,10 @@ import { Dock } from './components/Section/Dock';
 import { AssetsPanel } from './components/Section/AssetsPanel';
 import { PropertiesPanel } from './components/Section/PropertiesPanel';
 import { ProjectSettingsPanel } from './components/Section/ProjectSettingsPanel';
+import { PhysicsPanel } from './components/Section/PhysicsPanel';
 import { ExportModal } from './components/Package/ExportModal';
 import { createYamlString } from './utils/yamlExporter';
+import { bakeScenePhysics, SimulationSettings } from './utils/physics';
 import { INITIAL_OBJECTS, INITIAL_GLOBAL_SETTINGS, defaultTransition, DEFAULT_ACCENT_COLOR } from './constants';
 
 import './index.css';
@@ -31,7 +32,7 @@ const App = () => {
   // --- State ---
   const [accentColor, setAccentColor] = useState(DEFAULT_ACCENT_COLOR);
   const [objects, setObjects] = useState<SceneObject[]>(JSON.parse(JSON.stringify(INITIAL_OBJECTS)));
-  const [selectedId, setSelectedId] = useState<string | null>('1');
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   
   // Keyframe State
   const [selectedKeyframe, setSelectedKeyframe] = useState<{ id: string, index: number } | null>(null);
@@ -51,6 +52,7 @@ const App = () => {
   const [showTimeline, setShowTimeline] = useState(true);
   const [showProperties, setShowProperties] = useState(true);
   const [showProjectSettings, setShowProjectSettings] = useState(false);
+  const [showPhysicsPanel, setShowPhysicsPanel] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
 
   // Control State
@@ -314,6 +316,7 @@ const App = () => {
       startTime: Math.floor(currentTime), duration: 5, animations: [],
       introTransition: { ...defaultTransition },
       outroTransition: { ...defaultTransition },
+      physics: { enabled: false, type: 'dynamic', mass: 1, friction: 0.3, restitution: 0.5, force: { preset: 'none', strength: 20 } },
     };
     setObjects(prev => [...prev, newObj]);
     setSelectedId(newObj.id);
@@ -515,10 +518,47 @@ const App = () => {
       setAccentColor(DEFAULT_ACCENT_COLOR);
       setObjects(JSON.parse(JSON.stringify(INITIAL_OBJECTS)));
       setGlobalSettings(JSON.parse(JSON.stringify(INITIAL_GLOBAL_SETTINGS)));
-      setSelectedId('1');
+      setSelectedId(null);
       setCurrentTime(0);
       setIsPlaying(false);
       setSelectedKeyframe(null);
+  };
+
+  const handleBakePhysics = (settings: SimulationSettings) => {
+    const newKeyframesMap = bakeScenePhysics({
+        objects,
+        startTime: currentTime,
+        getInterpolatedValueAtTime,
+        simulationSettings: settings
+    });
+
+    setObjects(prevObjects => {
+        return prevObjects.map(obj => {
+            const newKeyframes = newKeyframesMap.get(obj.id);
+            if (!newKeyframes || newKeyframes.length === 0) {
+                return obj;
+            }
+
+            const bakeStartTime = currentTime;
+            const bakeEndTime = currentTime + settings.duration;
+
+            // Remove old keyframes within the bake duration
+            const existingKeyframes = obj.animations?.filter(kf => {
+                const globalKfTime = obj.startTime + kf.time;
+                return globalKfTime < bakeStartTime || globalKfTime > bakeEndTime;
+            }) || [];
+            
+            // Add new keyframes, adjusting time to be local to the object
+            const transformedNewKeyframes = newKeyframes.map(kf => ({
+                ...kf,
+                time: (bakeStartTime + kf.time) - obj.startTime
+            }));
+
+            const finalAnimations = [...existingKeyframes, ...transformedNewKeyframes].sort((a,b) => a.time - b.time);
+
+            return { ...obj, animations: finalAnimations };
+        });
+    });
   };
 
   const handleExportYaml = () => {
@@ -749,9 +789,26 @@ const App = () => {
         isOpen={showProjectSettings}
         onClose={() => setShowProjectSettings(false)}
         width={320}
-        height={480}
+        height={560}
       >
-          <ProjectSettingsPanel settings={globalSettings} setSettings={setGlobalSettings} />
+          <ProjectSettingsPanel 
+            settings={globalSettings} 
+            setSettings={setGlobalSettings}
+            accentColor={accentColor}
+            setAccentColor={setAccentColor}
+            handleLightSettingChange={handleLightSettingChange}
+          />
+      </Window>
+      
+      <Window
+        id="physics-simulator"
+        title="PHYSICS SIMULATOR"
+        isOpen={showPhysicsPanel}
+        onClose={() => setShowPhysicsPanel(false)}
+        width={320}
+        height={520}
+      >
+          <PhysicsPanel onBake={handleBakePhysics} />
       </Window>
 
       <Window 
@@ -766,12 +823,11 @@ const App = () => {
         onCopyKeyframeAsYaml={handleCopySelectedKeyframeValuesAsYaml}
         onPasteKeyframeFromYaml={handlePasteValuesToSelectedKeyframeFromYaml}
         onOpenProjectSettings={() => setShowProjectSettings(true)}
+        onOpenPhysicsPanel={() => setShowPhysicsPanel(prev => !prev)}
       >
         <PropertiesPanel
             selectedObject={selectedObject}
             selectedKeyframe={selectedKeyframe}
-            globalSettings={globalSettings}
-            accentColor={accentColor}
             isScaleLocked={isScaleLocked}
             getControlValue={getControlValue}
             handleControlChange={handleControlChange}
@@ -779,9 +835,6 @@ const App = () => {
             handleRemoveObject={handleRemoveObject}
             handleKeyframePropertyChange={handleKeyframePropertyChange}
             handleRemoveKeyframe={handleRemoveKeyframe}
-            handleLightSettingChange={handleLightSettingChange}
-            setGlobalSettings={setGlobalSettings}
-            setAccentColor={setAccentColor}
             setIsScaleLocked={setIsScaleLocked}
         />
       </Window>

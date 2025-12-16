@@ -1,4 +1,3 @@
-
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
@@ -27,6 +26,18 @@ export interface TransitionEffect {
   position: [number, number, number];
   rotation: [number, number, number];
   easing: string;
+}
+
+export interface PhysicsSettings {
+  enabled: boolean;
+  type: 'dynamic' | 'static';
+  mass: number;
+  friction: number;
+  restitution: number; // bounciness
+  force?: {
+    preset: 'none' | 'push_up' | 'push_down' | 'push_forward' | 'push_backward' | 'pull_center' | 'push_from_center' | 'pull_in_source' | 'push_out_source';
+    strength: number;
+  };
 }
 
 export interface SceneObject {
@@ -70,6 +81,7 @@ export interface SceneObject {
   animations: TimelineKeyframe[];
   introTransition: TransitionEffect;
   outroTransition: TransitionEffect;
+  physics?: PhysicsSettings;
 }
 
 export interface GlobalSettings {
@@ -621,7 +633,7 @@ export class Engine {
     return mesh;
   }
 
-  setTime(time: number, objects: SceneObject[], isPlaying: boolean, timeHasChanged: boolean) {
+  setTime(time: number, objects: SceneObject[], isPlaying: boolean, timeHasChanged: boolean, mode?: 'departure' | 'arrival') {
     if (!this.scene) return;
     
     objects.forEach(objData => {
