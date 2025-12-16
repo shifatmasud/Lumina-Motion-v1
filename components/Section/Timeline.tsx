@@ -1,4 +1,5 @@
 
+
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, Reorder, AnimatePresence, useDragControls, useMotionValue, useTransform } from 'framer-motion';
@@ -26,6 +27,7 @@ interface TimelineProps {
   isSnappingEnabled: boolean;
   onCopyAllKeyframesAsYaml: (trackId: string) => void;
   onPasteAllKeyframesFromYaml: (trackId: string) => void;
+  onRemoveAllKeyframes: (trackId: string) => void;
   copiedKeyframeYaml: string | null;
 }
 
@@ -112,8 +114,9 @@ const TrackContextMenu: React.FC<{
   onUpdateObject: (id: string, updates: Partial<SceneObject>) => void;
   onCopyAllKeyframes: () => void;
   onPasteAllKeyframes: () => void;
+  onRemoveAllKeyframes: () => void;
   copiedKeyframeYaml: string | null;
-}> = ({ rect, trackObject, onClose, onRemove, onSplit, onDuplicate, onRename, onResetCamera, onUpdateObject, onCopyAllKeyframes, onPasteAllKeyframes, copiedKeyframeYaml }) => {
+}> = ({ rect, trackObject, onClose, onRemove, onSplit, onDuplicate, onRename, onResetCamera, onUpdateObject, onCopyAllKeyframes, onPasteAllKeyframes, onRemoveAllKeyframes, copiedKeyframeYaml }) => {
   const isLocked = trackObject.locked || trackObject.type === 'camera' || trackObject.type === 'light';
   
   const menuActions = [
@@ -125,13 +128,15 @@ const TrackContextMenu: React.FC<{
       { label: 'Delete Track', icon: <Trash />, action: onRemove, danger: true, disabled: isLocked },
   ];
   
-  const canCopy = trackObject.animations && trackObject.animations.length > 0;
+  const hasKeyframes = trackObject.animations && trackObject.animations.length > 0;
   const canPaste = copiedKeyframeYaml ? copiedKeyframeYaml.trim().startsWith('-') : false;
 
   const keyframeActions = [
-      { label: 'Copy All Keyframes', icon: <Copy />, action: onCopyAllKeyframes, disabled: !canCopy },
-      { label: 'Paste Keyframes', icon: <ClipboardText />, action: onPasteAllKeyframes, disabled: !canPaste }
-  ]
+      { label: 'Copy All Keyframes', icon: <Copy />, action: onCopyAllKeyframes, disabled: !hasKeyframes, danger: false },
+      { label: 'Paste Keyframes', icon: <ClipboardText />, action: onPasteAllKeyframes, disabled: !canPaste, danger: false },
+      { type: 'divider' },
+      { label: 'Remove All Keyframes', icon: <Trash />, action: onRemoveAllKeyframes, disabled: !hasKeyframes, danger: true },
+  ];
 
   return createPortal(
     <>
@@ -189,30 +194,34 @@ const TrackContextMenu: React.FC<{
             </React.Fragment>
         ))}
         <div style={{height: '1px', background: DesignSystem.Color.Base.Border[1], margin: '4px 6px'}} />
-        {keyframeActions.map((item, i) => (
-            <div key={`kf-${i}`} 
-                onClick={() => { if (!item.disabled && item.action) { item.action(); onClose(); } }}
-                style={{ 
-                    padding: '8px 12px', 
-                    ...DesignSystem.Type.Label.S, 
-                    color: item.disabled ? DesignSystem.Color.Base.Content[3] : DesignSystem.Color.Base.Content[1],
-                    cursor: item.disabled ? 'not-allowed' : 'pointer',
-                    borderRadius: DesignSystem.Effect.Radius.S,
-                    transition: '0.1s',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    opacity: item.disabled ? 0.5 : 1
-                }}
-                onMouseEnter={(e) => {
-                  if (!item.disabled) e.currentTarget.style.background = DesignSystem.Color.Base.Surface[2];
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'transparent';
-                }}
-            >
-                {item.icon} {item.label}
-            </div>
+        {keyframeActions.map((item: any, i) => (
+            item.type === 'divider' ? (
+                <div key={`kf-div-${i}`} style={{height: '1px', background: DesignSystem.Color.Base.Border[1], margin: '4px 6px'}} />
+            ) : (
+                <div key={`kf-${i}`} 
+                    onClick={() => { if (!item.disabled && item.action) { item.action(); onClose(); } }}
+                    style={{ 
+                        padding: '8px 12px', 
+                        ...DesignSystem.Type.Label.S, 
+                        color: item.disabled ? DesignSystem.Color.Base.Content[3] : (item.danger ? DesignSystem.Color.Feedback.Error : DesignSystem.Color.Base.Content[1]),
+                        cursor: item.disabled ? 'not-allowed' : 'pointer',
+                        borderRadius: DesignSystem.Effect.Radius.S,
+                        transition: '0.1s',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        opacity: item.disabled ? 0.5 : 1
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!item.disabled) e.currentTarget.style.background = DesignSystem.Color.Base.Surface[2];
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = 'transparent';
+                    }}
+                >
+                    {item.icon} {item.label}
+                </div>
+            )
         ))}
       </motion.div>
     </>,
@@ -234,8 +243,9 @@ const TimelineItem: React.FC<{
     isSnappingEnabled: boolean;
     onCopyAllKeyframesAsYaml: (trackId: string) => void;
     onPasteAllKeyframesFromYaml: (trackId: string) => void;
+    onRemoveAllKeyframes: (trackId: string) => void;
     copiedKeyframeYaml: string | null;
-}> = ({ obj, isSelected, pixelsPerSecond, onClick, onRemove, onSplit, onDuplicate, onUpdateObject, selectedKeyframe, onSelectKeyframe, isSnappingEnabled, onCopyAllKeyframesAsYaml, onPasteAllKeyframesFromYaml, copiedKeyframeYaml }) => {
+}> = ({ obj, isSelected, pixelsPerSecond, onClick, onRemove, onSplit, onDuplicate, onUpdateObject, selectedKeyframe, onSelectKeyframe, isSnappingEnabled, onCopyAllKeyframesAsYaml, onPasteAllKeyframesFromYaml, onRemoveAllKeyframes, copiedKeyframeYaml }) => {
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const [showMenu, setShowMenu] = useState(false);
   const [menuRect, setMenuRect] = useState<DOMRect | null>(null);
@@ -541,6 +551,7 @@ const TimelineItem: React.FC<{
                   onUpdateObject={onUpdateObject}
                   onCopyAllKeyframes={() => onCopyAllKeyframesAsYaml(obj.id)}
                   onPasteAllKeyframes={() => onPasteAllKeyframesFromYaml(obj.id)}
+                  onRemoveAllKeyframes={() => onRemoveAllKeyframes(obj.id)}
                   copiedKeyframeYaml={copiedKeyframeYaml}
               />
           )}
@@ -553,7 +564,7 @@ export const TimelineSequencer: React.FC<TimelineProps> = ({
     objects, setObjects, selectedId, onSelect, isPlaying, onTogglePlay,
     currentTime, setCurrentTime, totalDuration, onAddKeyframe, selectedKeyframe, 
     onSelectKeyframe, onRemoveKeyframe, isSnappingEnabled,
-    onCopyAllKeyframesAsYaml, onPasteAllKeyframesFromYaml, copiedKeyframeYaml
+    onCopyAllKeyframesAsYaml, onPasteAllKeyframesFromYaml, onRemoveAllKeyframes, copiedKeyframeYaml
 }) => {
   const pixelsPerSecond = 100;
   const trackHeaderWidth = 160;
@@ -838,6 +849,7 @@ export const TimelineSequencer: React.FC<TimelineProps> = ({
                                 isSnappingEnabled={isSnappingEnabled}
                                 onCopyAllKeyframesAsYaml={onCopyAllKeyframesAsYaml}
                                 onPasteAllKeyframesFromYaml={onPasteAllKeyframesFromYaml}
+                                onRemoveAllKeyframes={onRemoveAllKeyframes}
                                 copiedKeyframeYaml={copiedKeyframeYaml}
                             />
                         ))}

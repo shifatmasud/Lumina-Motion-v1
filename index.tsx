@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import { v4 as uuidv4 } from 'uuid';
@@ -363,6 +364,15 @@ const App = () => {
           return { ...o, animations: newAnims };
       }));
       setSelectedKeyframe(null);
+  };
+
+  const handleRemoveAllKeyframes = (trackId: string) => {
+    setObjects(prev => prev.map(o => 
+      o.id === trackId ? { ...o, animations: [] } : o
+    ));
+    if (selectedKeyframe?.id === trackId) {
+        setSelectedKeyframe(null);
+    }
   };
   
   const handleSelectKeyframe = (id: string, index: number) => {
@@ -803,6 +813,7 @@ const App = () => {
             isSnappingEnabled={isSnappingEnabled}
             onCopyAllKeyframesAsYaml={handleCopyAllKeyframesAsYaml}
             onPasteAllKeyframesFromYaml={handlePasteAllKeyframesFromYaml}
+            onRemoveAllKeyframes={handleRemoveAllKeyframes}
             copiedKeyframeYaml={copiedKeyframeYaml}
           />
       </Window>
