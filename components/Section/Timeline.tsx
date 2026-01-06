@@ -1,5 +1,6 @@
 
 
+
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, Reorder, AnimatePresence, useDragControls, useMotionValue, useTransform } from 'framer-motion';
@@ -414,7 +415,8 @@ const TimelineItem: React.FC<{
             }}
         >
             <motion.div 
-                drag={!isLocked && "x"}
+                // FIX: Replaced logical AND with ternary operator for clearer type inference.
+                drag={isLocked ? false : "x"}
                 dragMomentum={false}
                 dragElastic={0}
                 onDragEnd={handleClipDragEnd}
