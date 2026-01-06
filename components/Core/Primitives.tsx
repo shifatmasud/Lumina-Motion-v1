@@ -43,6 +43,16 @@ interface GroupProps {
   children: React.ReactNode;
 }
 
+interface PropSliderProps {
+    label: string;
+    value: number;
+    onChange: (v: number) => void;
+    isMode?: boolean;
+    min?: number;
+    max?: number;
+    step?: number;
+}
+
 // --- Components ---
 
 export const Button: React.FC<ButtonProps> = ({ children, as = 'button', variant = 'secondary', active, style, ...props }) => {
@@ -225,7 +235,7 @@ export const Divider = () => (
     <div style={{ width: '100%', height: '1px', background: DesignSystem.Color.Base.Border[1], margin: `${DesignSystem.Space(2)} 0` }} />
 );
 
-export const PropSlider = ({ label, value, onChange, isMode, ...props }: any) => {
+export const PropSlider: React.FC<PropSliderProps> = ({ label, value, onChange, isMode, ...props }) => {
     const resetValue = label.toLowerCase().includes('scale') ? 1 : 0;
     return (
         <div style={{ position: 'relative', padding: isMode ? '4px' : '0', border: isMode ? `1px dashed ${DesignSystem.Color.Feedback.Warning}` : 'none', borderRadius: '8px', margin: isMode ? '-4px' : '0' }}>

@@ -107,6 +107,12 @@ export const ExportModal: React.FC<ExportModalProps> = ({ isOpen, onClose, engin
         }
 
         if (cancelExportRef.current) return;
+        
+        if (!blob) {
+            setStatus('cancelled');
+            alert('Export failed: Could not generate file.');
+            return;
+        }
 
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
