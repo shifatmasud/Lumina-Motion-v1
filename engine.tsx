@@ -1,7 +1,7 @@
 import * as THREE from 'three';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
-import { GLTFLoader, GLTF } from 'three/examples/jsm/loaders/GLTFLoader';
-import { SVGLoader } from 'three/examples/jsm/loaders/SVGLoader';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { GLTFLoader, GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { SVGLoader } from 'three/examples/jsm/loaders/SVGLoader.js';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
@@ -698,7 +698,11 @@ export class Engine {
 
       // Update Transform
       obj3d.position.fromArray(objData.position);
-      obj3d.rotation.fromArray(objData.rotation.map(d => THREE.MathUtils.degToRad(d)));
+      obj3d.rotation.set(
+        THREE.MathUtils.degToRad(objData.rotation[0]),
+        THREE.MathUtils.degToRad(objData.rotation[1]),
+        THREE.MathUtils.degToRad(objData.rotation[2])
+      );
       obj3d.scale.fromArray(objData.scale);
       
       // Calculate Interpolated Values
@@ -751,7 +755,14 @@ export class Engine {
         const lerp = (a: any, b: any) => gsap.utils.interpolate(a, b, easedProgress);
 
         if (departureValues.position && arrivalValues.position) obj3d.position.fromArray(lerp(departureValues.position, arrivalValues.position));
-        if (departureValues.rotation && arrivalValues.rotation) obj3d.rotation.fromArray((lerp(departureValues.rotation, arrivalValues.rotation) as [number, number, number]).map((v: number) => THREE.MathUtils.degToRad(v)));
+        if (departureValues.rotation && arrivalValues.rotation) {
+            const rot = lerp(departureValues.rotation, arrivalValues.rotation) as [number, number, number];
+            obj3d.rotation.set(
+                THREE.MathUtils.degToRad(rot[0]),
+                THREE.MathUtils.degToRad(rot[1]),
+                THREE.MathUtils.degToRad(rot[2])
+            );
+        }
         if (departureValues.scale && arrivalValues.scale) obj3d.scale.fromArray(lerp(departureValues.scale, arrivalValues.scale));
 
         if (departureValues.metalness !== undefined && arrivalValues.metalness !== undefined) finalMetalness = lerp(departureValues.metalness, arrivalValues.metalness);
