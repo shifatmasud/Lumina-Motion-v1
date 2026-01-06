@@ -192,9 +192,10 @@ export class Engine {
     this.camera.position.set(0, 0, 6);
     
     // Audio Listener
-    // Fix: AudioContext initialization with required sampleRate option as per guidelines
     this.audioListener = new THREE.AudioListener();
-    (this.audioListener as any).context = new (window.AudioContext || (window as any).webkitAudioContext)({sampleRate: 24000});
+    // Fix: Provide required sampleRate argument to AudioContext constructor
+    const AudioContextClass = (window.AudioContext || (window as any).webkitAudioContext);
+    (this.audioListener as any).context = new AudioContextClass({ sampleRate: 24000 });
     this.camera.add(this.audioListener);
 
     // Renderer
@@ -640,7 +641,7 @@ export class Engine {
 
       // Update Transform
       obj3d.position.fromArray(objData.position);
-      obj3d.rotation.fromArray(objData.rotation.map(d => THREE.MathUtils.degToRad(d)));
+      obj3d.rotation.fromArray(objData.rotation.map(d => THREE.MathUtils.degToRad(d)) as [number, number, number]);
       obj3d.scale.fromArray(objData.scale);
       
       // Calculate Interpolated Values
@@ -693,7 +694,7 @@ export class Engine {
         const lerp = (a: any, b: any) => gsap.utils.interpolate(a, b, easedProgress);
 
         if (departureValues.position && arrivalValues.position) obj3d.position.fromArray(lerp(departureValues.position, arrivalValues.position));
-        if (departureValues.rotation && arrivalValues.rotation) obj3d.rotation.fromArray(lerp(departureValues.rotation, arrivalValues.rotation).map((v: number) => THREE.MathUtils.degToRad(v)));
+        if (departureValues.rotation && arrivalValues.rotation) obj3d.rotation.fromArray(lerp(departureValues.rotation, arrivalValues.rotation).map((v: number) => THREE.MathUtils.degToRad(v)) as [number, number, number]);
         if (departureValues.scale && arrivalValues.scale) obj3d.scale.fromArray(lerp(departureValues.scale, arrivalValues.scale));
 
         if (departureValues.metalness !== undefined && arrivalValues.metalness !== undefined) finalMetalness = lerp(departureValues.metalness, arrivalValues.metalness);
@@ -963,7 +964,7 @@ export class Engine {
       this.renderer.setPixelRatio(settings.performance.pixelRatio);
       
       const lightObjectGroup = Array.from(this.objectsMap.values()).find(obj => 
-        obj.children.some(c => c instanceof THREE.DirectionalLight && c.castShadow)
+        obj.children.some(c => c instanceof THREE.DirectionalLight && (c as any).castShadow)
       );
 
       if (lightObjectGroup) {

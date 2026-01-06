@@ -325,6 +325,11 @@ const App = () => {
   };
 
   const handleUpdateObject = (id: string, updates: Partial<SceneObject>) => {
+    handleUpdateObjectAt(id, updates);
+  };
+
+  // Re-added helper for consistency
+  const handleUpdateObjectAt = (id: string, updates: Partial<SceneObject>) => {
     setObjects(prev => prev.map(o => o.id === id ? { ...o, ...updates } : o));
   };
 
