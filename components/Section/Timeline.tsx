@@ -1,6 +1,5 @@
 
 
-
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, Reorder, AnimatePresence, useDragControls, useMotionValue, useTransform } from 'framer-motion';
@@ -415,8 +414,7 @@ const TimelineItem: React.FC<{
             }}
         >
             <motion.div 
-                // FIX: Replaced logical AND with ternary operator for clearer type inference.
-                drag={isLocked ? false : "x"}
+                drag={!isLocked && "x"}
                 dragMomentum={false}
                 dragElastic={0}
                 onDragEnd={handleClipDragEnd}
@@ -625,8 +623,7 @@ export const TimelineSequencer: React.FC<TimelineProps> = ({
     setIsScrubbing(true);
     if (isPlaying) onTogglePlay();
 
-    // FIX: Changed signature to be compatible with both React SyntheticEvents and native PointerEvents.
-    const handleInteraction = (event: { clientX: number }) => {
+    const handleInteraction = (event: PointerEvent) => {
         const scrollContainerRect = scrollContainer.getBoundingClientRect();
         const clickInContainer = event.clientX - scrollContainerRect.left;
         const contentX = scrollContainer.scrollLeft + clickInContainer;
@@ -640,7 +637,7 @@ export const TimelineSequencer: React.FC<TimelineProps> = ({
         setCurrentTime(clampedTime);
     };
     
-    handleInteraction(e);
+    handleInteraction(e as PointerEvent);
 
     const onPointerMove = (moveEvent: PointerEvent) => {
         if (isDraggingPlayhead.current) {
