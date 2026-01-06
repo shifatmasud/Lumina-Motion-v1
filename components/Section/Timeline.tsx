@@ -414,7 +414,7 @@ const TimelineItem: React.FC<{
             }}
         >
             <motion.div 
-                drag={!isLocked ? "x" : false}
+                drag={!isLocked && "x"}
                 dragMomentum={false}
                 dragElastic={0}
                 onDragEnd={handleClipDragEnd}
@@ -637,7 +637,7 @@ export const TimelineSequencer: React.FC<TimelineProps> = ({
         setCurrentTime(clampedTime);
     };
     
-    handleInteraction(e as unknown as PointerEvent);
+    handleInteraction(e as PointerEvent);
 
     const onPointerMove = (moveEvent: PointerEvent) => {
         if (isDraggingPlayhead.current) {

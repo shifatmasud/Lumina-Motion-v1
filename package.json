@@ -1,35 +1,31 @@
 {
-  "name": "lumina-motion",
+  "name": "lumina-demo-v1",
   "private": true,
-  "version": "1.0.0",
+  "version": "0.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "vite build",
     "preview": "vite preview"
   },
   "dependencies": {
-    "@phosphor-icons/react": "^2.1.0",
-    "cannon-es": "^0.20.0",
-    "framer-motion": "12.23.24",
-    "gsap": "3.13.0",
-    "js-yaml": "^4.1.0",
+    "react": "^19.2.1",
+    "react-dom": "^19.2.1",
+    "uuid": "^13.0.0",
+    "framer-motion": "^12.23.26",
+    "three": "^0.182.0",
+    "@phosphor-icons/react": "^2.1.10",
+    "gsap": "^3.14.1",
+    "js-yaml": "^4.1.1",
     "jszip": "^3.10.1",
-    "lottie-web": "^5.12.2",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "three": "0.180.0",
-    "uuid": "^9.0.1",
-    "webm-writer": "^0.3.0"
+    "webm-writer": "^1.0.0",
+    "lottie-web": "^5.13.0",
+    "cannon-es": "^0.20.0"
   },
   "devDependencies": {
-    "@types/js-yaml": "^4.0.9",
-    "@types/react": "^18.2.66",
-    "@types/react-dom": "^18.2.22",
-    "@types/three": "0.180.0",
-    "@types/uuid": "^9.0.8",
-    "@vitejs/plugin-react": "^4.2.1",
-    "typescript": "^5.2.2",
-    "vite": "^5.2.0"
+    "@types/node": "^22.14.0",
+    "@vitejs/plugin-react": "^5.0.0",
+    "typescript": "~5.8.2",
+    "vite": "^6.2.0"
   }
 }

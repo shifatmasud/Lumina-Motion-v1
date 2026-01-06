@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import { v4 as uuidv4 } from 'uuid';
@@ -24,8 +25,8 @@ import './index.css';
 const App = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   const engineRef = useRef<Engine | null>(null);
-  const animationFrameRef = useRef<number | null>(null);
-  const lastTimeRef = useRef<number | null>(null);
+  const animationFrameRef = useRef<number>();
+  const lastTimeRef = useRef<number>();
   const prevTimeRef = useRef(0);
 
   // --- State ---

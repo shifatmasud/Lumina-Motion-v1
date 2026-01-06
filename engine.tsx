@@ -1,7 +1,7 @@
 import * as THREE from 'three';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { GLTFLoader, GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { SVGLoader } from 'three/examples/jsm/loaders/SVGLoader.js';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
+import { SVGLoader } from 'three/examples/jsm/loaders/SVGLoader';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
@@ -406,7 +406,7 @@ export class Engine {
     } else if (objData.type === 'svg') {
         mesh = new THREE.Group();
         if (objData.url) {
-            this.svgLoader.load(objData.url, (data: { paths: THREE.ShapePath[] }) => {
+            this.svgLoader.load(objData.url, (data) => {
                 mesh.userData.svgPaths = data.paths;
                 mesh.userData.currentExtrusion = objData.extrusion ?? 0.1;
                 mesh.userData.currentPathLength = objData.pathLength ?? 1.0;
@@ -524,8 +524,8 @@ export class Engine {
             const texture = new THREE.CanvasTexture(canvas);
             texture.colorSpace = THREE.SRGBColorSpace;
             
-            ((mesh as THREE.Mesh).material as THREE.MeshBasicMaterial).map = texture;
-            ((mesh as THREE.Mesh).material as THREE.MeshBasicMaterial).needsUpdate = true;
+            (mesh.material as THREE.MeshBasicMaterial).map = texture;
+            (mesh.material as THREE.MeshBasicMaterial).needsUpdate = true;
         }
     } else if (objData.type === 'glb') {
         mesh = new THREE.Group();
@@ -533,14 +533,14 @@ export class Engine {
         mesh.add(placeholder);
 
         if (objData.url) {
-            this.gltfLoader.load(objData.url, (gltf: GLTF) => {
+            this.gltfLoader.load(objData.url, (gltf) => {
                 mesh.remove(placeholder);
                 mesh.add(gltf.scene);
                 const box = new THREE.Box3().setFromObject(gltf.scene);
                 const center = box.getCenter(new THREE.Vector3());
                 gltf.scene.position.sub(center);
 
-                gltf.scene.traverse((child: THREE.Object3D) => {
+                gltf.scene.traverse((child) => {
                     if (child instanceof THREE.Mesh) {
                          child.castShadow = true;
                          child.receiveShadow = true;
@@ -698,11 +698,7 @@ export class Engine {
 
       // Update Transform
       obj3d.position.fromArray(objData.position);
-      obj3d.rotation.set(
-        THREE.MathUtils.degToRad(objData.rotation[0]),
-        THREE.MathUtils.degToRad(objData.rotation[1]),
-        THREE.MathUtils.degToRad(objData.rotation[2])
-      );
+      obj3d.rotation.fromArray(objData.rotation.map(d => THREE.MathUtils.degToRad(d)));
       obj3d.scale.fromArray(objData.scale);
       
       // Calculate Interpolated Values
@@ -755,14 +751,7 @@ export class Engine {
         const lerp = (a: any, b: any) => gsap.utils.interpolate(a, b, easedProgress);
 
         if (departureValues.position && arrivalValues.position) obj3d.position.fromArray(lerp(departureValues.position, arrivalValues.position));
-        if (departureValues.rotation && arrivalValues.rotation) {
-            const rot = lerp(departureValues.rotation, arrivalValues.rotation) as [number, number, number];
-            obj3d.rotation.set(
-                THREE.MathUtils.degToRad(rot[0]),
-                THREE.MathUtils.degToRad(rot[1]),
-                THREE.MathUtils.degToRad(rot[2])
-            );
-        }
+        if (departureValues.rotation && arrivalValues.rotation) obj3d.rotation.fromArray(lerp(departureValues.rotation, arrivalValues.rotation).map((v: number) => THREE.MathUtils.degToRad(v)));
         if (departureValues.scale && arrivalValues.scale) obj3d.scale.fromArray(lerp(departureValues.scale, arrivalValues.scale));
 
         if (departureValues.metalness !== undefined && arrivalValues.metalness !== undefined) finalMetalness = lerp(departureValues.metalness, arrivalValues.metalness);
