@@ -23,11 +23,7 @@ const handleImportmapPlugin = () => {
     enforce: 'pre', // Run this plugin before Vite's core HTML processing.
     
     transformIndexHtml(html, ctx) {
-      // Only run for production builds, not during `vite dev`.
-      if (ctx.server) {
-        return html;
-      }
-      // For production builds, replace the script tag with an empty string to remove it.
+      // Replace the script tag with an empty string to remove it during both dev and production.
       return html.replace(importmapScriptTagRegex, '');
     },
   };
