@@ -623,7 +623,8 @@ export const TimelineSequencer: React.FC<TimelineProps> = ({
     setIsScrubbing(true);
     if (isPlaying) onTogglePlay();
 
-    const handleInteraction = (event: PointerEvent) => {
+    // FIX: Changed signature to be compatible with both React SyntheticEvents and native PointerEvents.
+    const handleInteraction = (event: { clientX: number }) => {
         const scrollContainerRect = scrollContainer.getBoundingClientRect();
         const clickInContainer = event.clientX - scrollContainerRect.left;
         const contentX = scrollContainer.scrollLeft + clickInContainer;
@@ -637,7 +638,7 @@ export const TimelineSequencer: React.FC<TimelineProps> = ({
         setCurrentTime(clampedTime);
     };
     
-    handleInteraction(e as PointerEvent);
+    handleInteraction(e);
 
     const onPointerMove = (moveEvent: PointerEvent) => {
         if (isDraggingPlayhead.current) {

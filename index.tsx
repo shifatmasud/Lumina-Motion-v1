@@ -31,7 +31,8 @@ const App = () => {
 
   // --- State ---
   const [accentColor, setAccentColor] = useState(DEFAULT_ACCENT_COLOR);
-  const [objects, setObjects] = useState<SceneObject[]>(JSON.parse(JSON.stringify(INITIAL_OBJECTS)));
+  // FIX: Use lazy initialization for complex state to avoid recomputing on every render. This may also fix a misleading toolchain error.
+  const [objects, setObjects] = useState<SceneObject[]>(() => JSON.parse(JSON.stringify(INITIAL_OBJECTS)));
   const [selectedId, setSelectedId] = useState<string | null>(null);
   
   // Keyframe State
@@ -39,7 +40,8 @@ const App = () => {
   const [copiedKeyframeYaml, setCopiedKeyframeYaml] = useState<string | null>(null);
 
 
-  const [globalSettings, setGlobalSettings] = useState<GlobalSettings>(JSON.parse(JSON.stringify(INITIAL_GLOBAL_SETTINGS)));
+  // FIX: Use lazy initialization for complex state to avoid recomputing on every render.
+  const [globalSettings, setGlobalSettings] = useState<GlobalSettings>(() => JSON.parse(JSON.stringify(INITIAL_GLOBAL_SETTINGS)));
   
   // Timeline State
   const [totalDuration, setTotalDuration] = useState(5); // in seconds

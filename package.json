@@ -24,7 +24,6 @@
   },
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",
-    "@types/lottie-web": "^5.10.0",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
     "@types/three": "^0.165.0",
