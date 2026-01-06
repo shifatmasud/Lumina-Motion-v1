@@ -637,7 +637,7 @@ export const TimelineSequencer: React.FC<TimelineProps> = ({
         setCurrentTime(clampedTime);
     };
     
-    handleInteraction(e as PointerEvent);
+    handleInteraction(e as unknown as PointerEvent);
 
     const onPointerMove = (moveEvent: PointerEvent) => {
         if (isDraggingPlayhead.current) {
