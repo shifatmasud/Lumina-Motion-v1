@@ -1,11 +1,14 @@
-
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
 export default defineConfig({
   plugins: [react()],
+  base: './',
+  build: {
+    outDir: 'dist',
+    sourcemap: true
+  },
   define: {
-    // Ensure global is defined for older libraries
     global: 'window',
   },
 });
