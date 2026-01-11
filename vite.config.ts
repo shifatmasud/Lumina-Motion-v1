@@ -3,10 +3,11 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig({
   plugins: [react()],
-  base: './',
+  base: './', // Ensures relative paths for assets
   build: {
     outDir: 'dist',
     sourcemap: true,
+    // Remove external exclusions to force bundling of all dependencies
     rollupOptions: {
       output: {
         manualChunks: {
@@ -16,6 +17,7 @@ export default defineConfig({
     }
   },
   define: {
+    // Polyfill global for some older libraries
     global: 'window',
   },
 });
