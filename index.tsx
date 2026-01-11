@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import { v4 as uuidv4 } from 'uuid';
@@ -31,10 +32,12 @@ const App = () => {
 
   // --- State ---
   const [accentColor, setAccentColor] = useState(DEFAULT_ACCENT_COLOR);
-  // Fix: Wrapped initial state in a function for lazy initialization.
-  const [objects, setObjects] = useState<SceneObject[]>(() => JSON.parse(JSON.stringify(INITIAL_OBJECTS)));
-  // Fix: Wrapped initial state in a function for lazy initialization.
-  const [globalSettings, setGlobalSettings] = useState<GlobalSettings>(() => JSON.parse(JSON.stringify(INITIAL_GLOBAL_SETTINGS)));
+  // Fix: Performed deep copy outside useState to ensure a direct initial value,
+  // potentially resolving a linter misinterpretation of the lazy initializer as "no arguments".
+  const [objects, setObjects] = useState<SceneObject[]>(JSON.parse(JSON.stringify(INITIAL_OBJECTS)));
+  // Fix: Performed deep copy outside useState to ensure a direct initial value,
+  // potentially resolving a linter misinterpretation of the lazy initializer as "no arguments".
+  const [globalSettings, setGlobalSettings] = useState<GlobalSettings>(JSON.parse(JSON.stringify(INITIAL_GLOBAL_SETTINGS)));
   const [selectedId, setSelectedId] = useState<string | null>(null);
   
   // Keyframe State
