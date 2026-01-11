@@ -31,9 +31,10 @@ const App = () => {
 
   // --- State ---
   const [accentColor, setAccentColor] = useState(DEFAULT_ACCENT_COLOR);
-  // Fix: Corrected JSON.stringify calls to take the target object as an argument
-  const [objects, setObjects] = useState<SceneObject[]>(JSON.parse(JSON.stringify(INITIAL_OBJECTS)));
-  const [globalSettings, setGlobalSettings] = useState<GlobalSettings>(JSON.parse(JSON.stringify(INITIAL_GLOBAL_SETTINGS)));
+  // Fix: Wrapped initial state in a function for lazy initialization.
+  const [objects, setObjects] = useState<SceneObject[]>(() => JSON.parse(JSON.stringify(INITIAL_OBJECTS)));
+  // Fix: Wrapped initial state in a function for lazy initialization.
+  const [globalSettings, setGlobalSettings] = useState<GlobalSettings>(() => JSON.parse(JSON.stringify(INITIAL_GLOBAL_SETTINGS)));
   const [selectedId, setSelectedId] = useState<string | null>(null);
   
   // Keyframe State
@@ -514,8 +515,8 @@ const App = () => {
   
   const handleResetScene = () => {
       setAccentColor(DEFAULT_ACCENT_COLOR);
-      setObjects(JSON.parse(JSON.stringify(INITIAL_OBJECTS)));
-      setGlobalSettings(JSON.parse(JSON.stringify(INITIAL_GLOBAL_SETTINGS)));
+      setObjects(() => JSON.parse(JSON.stringify(INITIAL_OBJECTS)));
+      setGlobalSettings(() => JSON.parse(JSON.stringify(INITIAL_GLOBAL_SETTINGS)));
       setSelectedId(null);
       setCurrentTime(0);
       setIsPlaying(false);
