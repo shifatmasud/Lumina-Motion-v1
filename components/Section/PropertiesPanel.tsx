@@ -1,4 +1,5 @@
 
+
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -187,7 +188,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                     {selectedObject.type !== 'camera' && selectedObject.type !== 'audio' && selectedObject.type !== 'light' && (
                         <Group title="APPEARANCE" icon={<Eye weight="fill"/>}>
                             <PropSlider label="OPACITY" value={getControlValue('opacity')} onChange={(v: number) => handleControlChange('opacity', v)} isMode={selectedKeyframe?.id === selectedObject.id} min={0} max={1} step={0.01} />
-                            {(selectedObject.type === 'mesh' || selectedObject.type === 'svg' || selectedObject.type === 'glb' || selectedObject.type === 'plane' || selectedObject.type === 'video') && (
+                            {(selectedObject.type === 'mesh' || selectedObject.type === 'svg' || selectedObject.type === 'glb' || selectedObject.type === 'plane' || selectedObject.type === 'video' || selectedObject.type === 'lottie') && (
                                 <Toggle 
                                     label="WIREFRAME" 
                                     value={selectedObject.wireframe || false} 
@@ -217,7 +218,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                            {selectedObject.type === 'svg' && ( <> <PropSlider label="EXTRUSION" value={getControlValue('extrusion')} onChange={v => handleControlChange('extrusion', v)} min={0} max={10} step={0.01} isMode={selectedKeyframe?.id === selectedObject.id} /> <PropSlider label="PATH LENGTH" value={getControlValue('pathLength')} onChange={v => handleControlChange('pathLength', v)} min={0} max={1} step={0.01} isMode={selectedKeyframe?.id === selectedObject.id} /> </> )}
                           <Divider />
                           <PropSlider label="TRANSMISSION" value={getControlValue('transmission')} onChange={v => handleControlChange('transmission', v)} min={0} max={1} step={0.01} isMode={selectedKeyframe?.id === selectedObject.id} />
-                          <AnimatePresence> {getControlValue('transmission') > 0 && ( <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} style={{ overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: DesignSystem.Space(3) }}> <PropSlider label="IOR" value={getControlValue('ior')} onChange={v => handleControlChange('ior', v)} min={1} max={2.5} step={0.01} isMode={selectedKeyframe?.id === selectedObject.id} /> <PropSlider label="THICKNESS" value={getControlValue('thickness')} onChange={v => handleControlChange('ior', v)} min={0} max={5} step={0.1} isMode={selectedKeyframe?.id === selectedObject.id} /> </motion.div> )} </AnimatePresence>
+                          <AnimatePresence> {getControlValue('transmission') > 0 && ( <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} style={{ overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: DesignSystem.Space(3) }}> <PropSlider label="IOR" value={getControlValue('ior')} onChange={v => handleControlChange('ior', v)} min={1} max={2.5} step={0.01} isMode={selectedKeyframe?.id === selectedObject.id} /> <PropSlider label="THICKNESS" value={getControlValue('thickness')} onChange={v => handleControlChange('thickness', v)} min={0} max={5} step={0.1} isMode={selectedKeyframe?.id === selectedObject.id} /> </motion.div> )} </AnimatePresence>
                           <Divider />
                           <PropSlider label="CLEARCOAT" value={getControlValue('clearcoat')} onChange={v => handleControlChange('clearcoat', v)} min={0} max={1} step={0.01} isMode={selectedKeyframe?.id === selectedObject.id} />
                           <AnimatePresence> {getControlValue('clearcoat') > 0 && ( <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} style={{ overflow: 'hidden' }}> <PropSlider label="ROUGHNESS" value={getControlValue('clearcoatRoughness')} onChange={v => handleControlChange('clearcoatRoughness', v)} min={0} max={1} step={0.01} isMode={selectedKeyframe?.id === selectedObject.id} /> </motion.div> )} </AnimatePresence>
@@ -266,7 +267,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
     
                     {(selectedObject.type === 'video' || selectedObject.type === 'plane') && ( <Group title="DISTORTION" icon={<Cylinder />}> <PropSlider label="CYLINDER WRAP" value={getControlValue('curvature')} onChange={(v: number) => handleControlChange('curvature', v)} isMode={selectedKeyframe?.id === selectedObject.id} min={-0.5} max={0.5} step={0.01} /> </Group> )}
     
-                    {(selectedObject.type === 'video') && ( <Group title="PLAYBACK" icon={<FilmStrip />}> <Toggle label="LOOP" value={selectedObject.loop ?? true} onChange={(v) => handleUpdateObject(selectedObject.id, { loop: v })} /> <div style={{ ...DesignSystem.Type.Label.S, fontSize: '10px', color: DesignSystem.Color.Base.Content[3], padding: '4px', textAlign: 'center', background: DesignSystem.Color.Base.Surface[2], borderRadius: DesignSystem.Effect.Radius.S }}> Playback is controlled by the main timeline.</div> </Group> )}
+                    {(selectedObject.type === 'video' || selectedObject.type === 'lottie') && ( <Group title="PLAYBACK" icon={<FilmStrip />}> <Toggle label="LOOP" value={selectedObject.loop ?? true} onChange={(v) => handleUpdateObject(selectedObject.id, { loop: v })} /> <div style={{ ...DesignSystem.Type.Label.S, fontSize: '10px', color: DesignSystem.Color.Base.Content[3], padding: '4px', textAlign: 'center', background: DesignSystem.Color.Base.Surface[2], borderRadius: DesignSystem.Effect.Radius.S }}> Playback is controlled by the main timeline.</div> </Group> )}
     
                     {(selectedObject.type === 'video' || selectedObject.type === 'plane') && (
                         <Group title="EFFECTS">
