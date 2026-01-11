@@ -1,11 +1,10 @@
 
-
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, Reorder, AnimatePresence, useDragControls, useMotionValue, useTransform } from 'framer-motion';
 import { v4 as uuidv4 } from 'uuid';
 import gsap from 'gsap';
-import { Play, Pause, Diamond, DotsSixVertical, DotsThreeVertical, Scissors, Copy, Trash, Camera as CameraIcon, ArrowCounterClockwise, SpeakerHigh, Cube, PencilSimple, ClipboardText, MagicWand, Lightbulb, WaveSine, Eye, EyeSlash } from '@phosphor-icons/react';
+import { Play, Pause, Diamond, DotsSixVertical, DotsThreeVertical, Scissors, Copy, Trash, Camera as CameraIcon, ArrowCounterClockwise, SpeakerHigh, Cube, PencilSimple, ClipboardText, Lightbulb, Eye, EyeSlash } from '@phosphor-icons/react';
 import { DesignSystem } from '../../theme';
 import { SceneObject, TimelineKeyframe } from '../../engine';
 import { Button } from '../Core/Primitives';
@@ -290,7 +289,6 @@ const TimelineItem: React.FC<{
           case 'camera': return <CameraIcon weight="fill"/>;
           case 'audio': return <SpeakerHigh weight="fill"/>;
           case 'glb': return <Cube weight="fill"/>;
-          case 'lottie': return <MagicWand weight="fill" />;
           case 'light': return <Lightbulb weight="fill" />;
           default: return null;
       }
@@ -435,7 +433,7 @@ const TimelineItem: React.FC<{
                     borderRadius: '6px',
                     border: `1px solid ${isSelected ? DesignSystem.Color.Accent.Content[2] : DesignSystem.Color.Base.Border[2]}`,
                     cursor: isLocked ? 'default' : 'grab',
-                    overflow: 'visible', // Allow handles to be visible
+                    overflow: 'visible',
                     boxShadow: isSelected ? DesignSystem.Effect.Shadow.Glow : 'none',
                     zIndex: 1,
                     transition: 'background 0.2s ease-in-out'
@@ -573,12 +571,10 @@ export const TimelineSequencer: React.FC<TimelineProps> = ({
   const isDraggingPlayhead = useRef(false);
   const [isScrubbing, setIsScrubbing] = useState(false);
   
-  // Use motion values for smooth, non-render-blocking playhead animation
   const motionCurrentTime = useMotionValue(currentTime);
   const playheadX = useTransform(motionCurrentTime, (time) => time * pixelsPerSecond);
 
   useEffect(() => {
-    // Sync motion value when currentTime prop changes from state
     motionCurrentTime.set(currentTime);
   }, [currentTime, motionCurrentTime]);
   
@@ -637,7 +633,8 @@ export const TimelineSequencer: React.FC<TimelineProps> = ({
         setCurrentTime(clampedTime);
     };
     
-    handleInteraction(e as PointerEvent);
+    // Fix: Convert PointerEvent<HTMLElement> to unknown then to PointerEvent to satisfy TypeScript
+    handleInteraction(e as unknown as PointerEvent);
 
     const onPointerMove = (moveEvent: PointerEvent) => {
         if (isDraggingPlayhead.current) {
@@ -674,13 +671,11 @@ export const TimelineSequencer: React.FC<TimelineProps> = ({
   const renderRulerTicks = () => {
     const ticks = [];
     for (let i = 0; i <= totalDuration; i++) {
-        // Major Tick (Seconds)
         ticks.push(
             <div key={i} style={{ position: 'absolute', left: i * pixelsPerSecond, top: 0, height: '100%', pointerEvents: 'none', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', borderLeft: `1px solid ${DesignSystem.Color.Base.Content[3]}` }}>
                 <span style={{ marginLeft: '4px', marginBottom: '2px', fontSize: '9px', fontFamily: DesignSystem.Type.Label.S.fontFamily, color: DesignSystem.Color.Base.Content[3], fontWeight: 500 }}>{i}s</span>
             </div>
         );
-        // Half-second tick (Minimalist)
         if (i < totalDuration) {
              ticks.push(
                 <div key={`${i}-half`} style={{ position: 'absolute', left: (i + 0.5) * pixelsPerSecond, bottom: 0, width: '1px', height: '6px', background: DesignSystem.Color.Base.Content[3], opacity: 0.3 }} />
@@ -692,7 +687,6 @@ export const TimelineSequencer: React.FC<TimelineProps> = ({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: DesignSystem.Color.Base.Surface[1], userSelect: 'none' }}>
-        {/* Toolbar */}
         <div style={{ height: '48px', borderBottom: `1px solid ${DesignSystem.Color.Base.Border[1]}`, display: 'flex', alignItems: 'center', padding: `0 ${DesignSystem.Space(2)}`, gap: DesignSystem.Space(2), background: DesignSystem.Color.Base.Surface['3b'], backdropFilter: 'blur(20px)', zIndex: 20 }}>
              <Button active={isPlaying} onClick={onTogglePlay} style={{ width: '36px', height: '36px', borderRadius: '50%' }}>
                  {isPlaying ? <Pause weight="fill" size={16} /> : <Play weight="fill" size={16} />}
@@ -720,7 +714,6 @@ export const TimelineSequencer: React.FC<TimelineProps> = ({
              </div>
         </div>
 
-        {/* Scrollable Timeline Area */}
         <div 
             ref={timelineContainerRef} 
             style={{ 
@@ -733,7 +726,6 @@ export const TimelineSequencer: React.FC<TimelineProps> = ({
         >
             <div style={{ minWidth: `${totalWidth}px`, height: '100%', display: 'flex', flexDirection: 'column', position: 'relative' }}>
                 
-                {/* Sticky Ruler Container */}
                 <div 
                     ref={rulerRef}
                     onPointerDown={onScrubberPointerDown}
@@ -750,7 +742,6 @@ export const TimelineSequencer: React.FC<TimelineProps> = ({
                         touchAction: 'none' 
                     }}
                 >
-                    {/* Corner */}
                     <div style={{ 
                         width: `${trackHeaderWidth}px`, 
                         flexShrink: 0, 
@@ -769,18 +760,16 @@ export const TimelineSequencer: React.FC<TimelineProps> = ({
                         TIMELINE
                     </div>
 
-                    {/* Time Marks */}
                     <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
                          {renderRulerTicks()}
                     </div>
                 </div>
 
-                {/* PLAYHEAD */}
                 <motion.div
                     style={{
                         position: 'absolute',
                         left: `calc(${trackHeaderWidth}px - 12px)`,
-                        top: '48px', // Start below the ruler
+                        top: '48px',
                         bottom: 0,
                         x: playheadX,
                         width: '24px',
@@ -788,19 +777,17 @@ export const TimelineSequencer: React.FC<TimelineProps> = ({
                         pointerEvents: 'none',
                     }}
                 >
-                    {/* Line */}
                     <div style={{
                         position: 'absolute',
                         left: '12px',
                         top: 0,
                         width: '1px',
-                        height: '100%', // Span the track area
+                        height: '100%',
                         background: DesignSystem.Color.Accent.Surface[1],
                         boxShadow: `0 0 4px ${DesignSystem.Color.Accent.Surface[1]}`,
                         opacity: 0.8
                     }} />
 
-                    {/* Diamond Handle (Positioned relative to its parent, moving up into the ruler) */}
                     <div style={{
                         position: 'absolute',
                         top: '-29px',
@@ -815,9 +802,7 @@ export const TimelineSequencer: React.FC<TimelineProps> = ({
                     }} />
                 </motion.div>
 
-                {/* Tracks Area */}
                 <div style={{ position: 'relative', flex: 1, minHeight: '150px' }}>
-                    {/* Background Grid */}
                     <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', paddingLeft: `${trackHeaderWidth}px` }}>
                          {Array.from({ length: totalDuration + 1 }).map((_, i) => (
                             <div key={i} style={{ 
@@ -831,7 +816,6 @@ export const TimelineSequencer: React.FC<TimelineProps> = ({
                         ))}
                     </div>
 
-                    {/* Sortable Tracks */}
                     <Reorder.Group axis="y" values={objects} onReorder={setObjects} style={{ margin: 0, padding: 0, minHeight: '100px' }}>
                         {objects.map(obj => (
                             <TimelineItem 
@@ -855,7 +839,6 @@ export const TimelineSequencer: React.FC<TimelineProps> = ({
                         ))}
                     </Reorder.Group>
                     
-                    {/* Empty State */}
                     {objects.length === 0 && (
                         <div style={{ 
                             height: '200px', 

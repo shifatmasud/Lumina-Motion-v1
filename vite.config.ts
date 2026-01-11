@@ -1,23 +1,26 @@
-import path from 'path';
-import { defineConfig, loadEnv } from 'vite';
+
+import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
-export default defineConfig(({ mode }) => {
-    const env = loadEnv(mode, '.', '');
-    return {
-      server: {
-        port: 3000,
-        host: '0.0.0.0',
-      },
-      plugins: [react()],
-      define: {
-        'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
-        'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY)
-      },
-      resolve: {
-        alias: {
-          '@': path.resolve(__dirname, '.'),
+export default defineConfig({
+  plugins: [
+    react(),
+    {
+      name: 'strip-importmap',
+      transformIndexHtml(html) {
+        // Only strip the importmap script tag in production to let Vite handle modules
+        if (process.env.NODE_ENV === 'production') {
+          return html.replace(/<script src=".\/importmap.js" type="importmap"><\/script>/, '');
         }
+        return html;
       }
-    };
+    }
+  ],
+  build: {
+    outDir: 'dist',
+    sourcemap: true
+  },
+  server: {
+    port: 3000
+  }
 });

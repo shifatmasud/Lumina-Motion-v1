@@ -1,5 +1,4 @@
 
-
 import React from 'react';
 import { Plus, Export, Image as ImageIcon, Cube } from '@phosphor-icons/react';
 import { DesignSystem } from '../../theme';
@@ -24,7 +23,7 @@ export const AssetsPanel: React.FC<AssetsPanelProps> = ({ onAddObject, onExportV
                     </div> <span style={DesignSystem.Type.Label.S}>Cube</span>
                 </Button>
                 <label style={{ display: 'contents' }}>
-                    <input type="file" accept=".png,.gif,.jpg,.jpeg,.webp,.mp4,.svg,.wav,.mp3,.ogg,.glb,.gltf,.lottie" hidden onChange={onFileUpload} />
+                    <input type="file" accept=".png,.gif,.jpg,.jpeg,.webp,.mp4,.svg,.wav,.mp3,.ogg,.glb,.gltf" hidden onChange={onFileUpload} />
                     <Button as="div" style={{ flexDirection: 'column', height: '90px', gap: '8px' }}>
                         <div style={{ width: '32px', height: '32px', background: DesignSystem.Color.Base.Surface[2], borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                              <Plus size={18} />
@@ -44,7 +43,7 @@ export const AssetsPanel: React.FC<AssetsPanelProps> = ({ onAddObject, onExportV
 
             <Divider />
             <div style={{ flex: 1, border: `1px dashed ${DesignSystem.Color.Base.Border[2]}`, borderRadius: DesignSystem.Effect.Radius.M, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '8px', color: DesignSystem.Color.Base.Content[3], background: 'rgba(255,255,255,0.01)', textAlign: 'center', padding: '12px' }}>
-                <ImageIcon size={24} /> <span style={DesignSystem.Type.Label.S}>Drag PNG, GIF, JPG, MP4, WAV, GLB, .LOTTIE...</span>
+                <ImageIcon size={24} /> <span style={DesignSystem.Type.Label.S}>Drag PNG, GIF, JPG, MP4, WAV, GLB...</span>
             </div>
          </div>
     );

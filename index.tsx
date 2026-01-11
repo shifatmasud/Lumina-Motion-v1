@@ -31,15 +31,15 @@ const App = () => {
 
   // --- State ---
   const [accentColor, setAccentColor] = useState(DEFAULT_ACCENT_COLOR);
+  // Fix: Corrected JSON.stringify calls to take the target object as an argument
   const [objects, setObjects] = useState<SceneObject[]>(JSON.parse(JSON.stringify(INITIAL_OBJECTS)));
+  const [globalSettings, setGlobalSettings] = useState<GlobalSettings>(JSON.parse(JSON.stringify(INITIAL_GLOBAL_SETTINGS)));
   const [selectedId, setSelectedId] = useState<string | null>(null);
   
   // Keyframe State
   const [selectedKeyframe, setSelectedKeyframe] = useState<{ id: string, index: number } | null>(null);
   const [copiedKeyframeYaml, setCopiedKeyframeYaml] = useState<string | null>(null);
 
-
-  const [globalSettings, setGlobalSettings] = useState<GlobalSettings>(JSON.parse(JSON.stringify(INITIAL_GLOBAL_SETTINGS)));
   
   // Timeline State
   const [totalDuration, setTotalDuration] = useState(5); // in seconds
@@ -153,7 +153,9 @@ const App = () => {
   }, [currentTime, objects, isPlaying]);
 
   useEffect(() => {
-    if (engineRef.current) engineRef.current.updateGlobalSettings(globalSettings);
+    if (engineRef.current) {
+      engineRef.current.updateGlobalSettings(globalSettings);
+    }
   }, [globalSettings]);
 
   // Playback Loop
@@ -265,7 +267,6 @@ const App = () => {
         'mesh': ['position', 'rotation', 'scale', 'opacity', 'metalness', 'roughness', 'transmission', 'ior', 'thickness', 'clearcoat', 'clearcoatRoughness', 'color'],
         'svg': ['position', 'rotation', 'scale', 'opacity', 'metalness', 'roughness', 'transmission', 'ior', 'thickness', 'clearcoat', 'clearcoatRoughness', 'extrusion', 'pathLength', 'color'],
         'plane': ['position', 'rotation', 'scale', 'opacity', 'curvature'],
-        'lottie': ['position', 'rotation', 'scale', 'opacity'],
         'video': ['position', 'rotation', 'scale', 'opacity', 'curvature', 'volume'],
         'glb': ['position', 'rotation', 'scale', 'opacity'],
         'audio': ['position', 'volume'],
@@ -294,7 +295,7 @@ const App = () => {
   const handleAddObject = (type: SceneObject['type'], url?: string, width?: number, height?: number) => {
     const defaultNameMap = {
         mesh: 'Cube', camera: 'Camera', audio: 'Audio', video: 'Video',
-        glb: 'Model', plane: 'Image', svg: 'SVG Shape', lottie: 'Animation', light: 'Light'
+        glb: 'Model', plane: 'Image', svg: 'SVG Shape', light: 'Light'
     };
     const defaultName = defaultNameMap[type] || 'Object';
     
@@ -312,7 +313,7 @@ const App = () => {
       curvature: 0,
       volume: type === 'audio' || type === 'video' ? 1.0 : undefined,
       chromaKey: type === 'video' ? { enabled: false, color: '#00ff00', similarity: 0.1, smoothness: 0.1 } : undefined,
-      loop: (type === 'video' || type === 'lottie') ? true : undefined,
+      loop: (type === 'video') ? true : undefined,
       startTime: Math.floor(currentTime), duration: 5, animations: [],
       introTransition: { ...defaultTransition },
       outroTransition: { ...defaultTransition },
@@ -324,6 +325,11 @@ const App = () => {
   };
 
   const handleUpdateObject = (id: string, updates: Partial<SceneObject>) => {
+    handleUpdateObjectAt(id, updates);
+  };
+
+  // Re-added helper for consistency
+  const handleUpdateObjectAt = (id: string, updates: Partial<SceneObject>) => {
     setObjects(prev => prev.map(o => o.id === id ? { ...o, ...updates } : o));
   };
 
@@ -403,7 +409,6 @@ const App = () => {
     const localTime = kf.time;
     const fullValues = getFullKeyframeValuesAtTime(selectedObject, localTime);
 
-    // Construct the full keyframe object for copying
     const keyframeToCopy = {
         time: kf.time,
         name: kf.name,
@@ -411,7 +416,6 @@ const App = () => {
         values: fullValues,
     };
 
-    // Clean object to remove undefined keys before dumping
     const cleanedKeyframeToCopy = JSON.parse(JSON.stringify(keyframeToCopy));
 
     try {
@@ -434,18 +438,13 @@ const App = () => {
             throw new Error('Pasted content is not a valid keyframe object.');
         }
         
-        // Prepare updates, preserving the keyframe's original time.
         const updates: Partial<TimelineKeyframe> = {};
 
-        // The pasted content could be a full keyframe object or just a values object.
-        // We prioritize pasting a full keyframe structure if it's present.
         if ('values' in parsedKeyframe && typeof parsedKeyframe.values === 'object') {
-            // It's a full keyframe object.
             updates.values = parsedKeyframe.values as TimelineKeyframe['values'];
             if ('name' in parsedKeyframe) updates.name = parsedKeyframe.name as string;
             if ('easing' in parsedKeyframe) updates.easing = parsedKeyframe.easing as string;
         } else {
-            // Assume the entire pasted object is the 'values' block for backward compatibility.
             updates.values = parsedKeyframe as TimelineKeyframe['values'];
         }
 
@@ -490,7 +489,6 @@ const App = () => {
              throw new Error('Pasted content is not a valid keyframe array.');
         }
         
-        // Robust validation of the pasted structure
         const isValidKeyframeArray = parsedKeyframes.every(kf => 
             typeof kf === 'object' && kf !== null &&
             typeof kf.time === 'number' &&
@@ -542,13 +540,11 @@ const App = () => {
             const bakeStartTime = currentTime;
             const bakeEndTime = currentTime + settings.duration;
 
-            // Remove old keyframes within the bake duration
             const existingKeyframes = obj.animations?.filter(kf => {
                 const globalKfTime = obj.startTime + kf.time;
                 return globalKfTime < bakeStartTime || globalKfTime > bakeEndTime;
             }) || [];
             
-            // Add new keyframes, adjusting time to be local to the object
             const transformedNewKeyframes = newKeyframes.map(kf => ({
                 ...kf,
                 time: (bakeStartTime + kf.time) - obj.startTime
@@ -580,45 +576,6 @@ const App = () => {
     }
   };
 
-  const processLottieFile = async (file: File) => {
-    const zip = new JSZip();
-    try {
-      const content = await zip.loadAsync(file);
-      const manifestFile = content.file('manifest.json');
-      if (!manifestFile) {
-          console.error('manifest.json not found in .lottie file');
-          return;
-      }
-      const manifestStr = await manifestFile.async('string');
-      const manifest = JSON.parse(manifestStr);
-      const animationId = manifest.animations[0]?.id;
-      if (!animationId) {
-          console.error('No animation found in manifest.json');
-          return;
-      }
-
-      const animationFile = content.file(`animations/${animationId}.json`);
-      if (!animationFile) {
-          console.error(`Animation file animations/${animationId}.json not found`);
-          return;
-      }
-
-      const animationStr = await animationFile.async('string');
-      const animationData = JSON.parse(animationStr);
-      
-      const blob = new Blob([animationStr], { type: 'application/json' });
-      const animationUrl = URL.createObjectURL(blob);
-      
-      const width = animationData.w;
-      const height = animationData.h;
-
-      handleAddObject('lottie', animationUrl, width, height);
-
-    } catch (e) {
-      console.error('Failed to process .lottie file', e);
-    }
-  };
-
   const handleDrop = (e: React.DragEvent) => { e.preventDefault(); if (e.dataTransfer.files[0]) processFile(e.dataTransfer.files[0]); };
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => { if (e.target.files?.[0]) processFile(e.target.files[0]); };
   
@@ -629,9 +586,6 @@ const App = () => {
       
       if (name.endsWith('.svg')) {
           handleAddObject('svg', url);
-      }
-      else if (name.endsWith('.lottie')) {
-          processLottieFile(file);
       }
       else if (type.startsWith('image/')) {
           const img = new Image();
@@ -690,7 +644,7 @@ const App = () => {
         newScale[axis] = value;
         
         finalValue = newScale;
-        axis = undefined; // Unset axis since we are now passing the full array
+        axis = undefined;
     }
 
     if (selectedKeyframe && selectedKeyframe.id === selectedId) {

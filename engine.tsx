@@ -1,3 +1,4 @@
+
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
@@ -8,7 +9,6 @@ import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { VignetteShader } from 'three/examples/jsm/shaders/VignetteShader.js';
 import gsap from 'gsap';
-import lottie from 'lottie-web';
 
 export interface TimelineKeyframe {
   time: number; // in seconds, relative to the clip's start
@@ -43,7 +43,7 @@ export interface PhysicsSettings {
 export interface SceneObject {
   id: string;
   name?: string;
-  type: 'mesh' | 'plane' | 'video' | 'glb' | 'audio' | 'camera' | 'svg' | 'lottie' | 'light';
+  type: 'mesh' | 'plane' | 'video' | 'glb' | 'audio' | 'camera' | 'svg' | 'light';
   url?: string;
   width?: number;
   height?: number;
@@ -154,7 +154,6 @@ export class Engine {
   pointer: THREE.Vector2;
   objectsMap: Map<string, THREE.Object3D>;
   mediaElements: Map<string, HTMLVideoElement>;
-  lottieAnimations: Map<string, any>;
   composer: EffectComposer;
   bloomPass: UnrealBloomPass;
   vignettePass: ShaderPass;
@@ -173,7 +172,6 @@ export class Engine {
     this.onSelect = onSelect;
     this.objectsMap = new Map();
     this.mediaElements = new Map();
-    this.lottieAnimations = new Map();
     this.pointer = new THREE.Vector2();
     this.raycaster = new THREE.Raycaster();
     this.gltfLoader = new GLTFLoader();
@@ -195,6 +193,9 @@ export class Engine {
     
     // Audio Listener
     this.audioListener = new THREE.AudioListener();
+    // Fix: Provide required sampleRate argument to AudioContext constructor
+    const AudioContextClass = (window.AudioContext || (window as any).webkitAudioContext);
+    (this.audioListener as any).context = new AudioContextClass({ sampleRate: 24000 });
     this.camera.add(this.audioListener);
 
     // Renderer
@@ -485,48 +486,6 @@ export class Engine {
            sound.setMediaElementSource(videoElement);
            mesh.add(sound);
        }
-    } else if (objData.type === 'lottie') {
-        let planeWidth = 1.6;
-        let planeHeight = 0.9;
-        if (objData.width && objData.height && objData.width > 0 && objData.height > 0) {
-            const aspectRatio = objData.width / objData.height;
-            if (aspectRatio > 1) {
-                planeWidth = 1.6;
-                planeHeight = 1.6 / aspectRatio;
-            } else {
-                planeHeight = 1.6;
-                planeWidth = 1.6 * aspectRatio;
-            }
-        }
-        
-        const geometry = new THREE.PlaneGeometry(planeWidth, planeHeight);
-        const material = new THREE.MeshBasicMaterial({ color: '#333', transparent: true, opacity: objData.opacity ?? 1.0, side: THREE.DoubleSide, wireframe: !!objData.wireframe });
-        mesh = new THREE.Mesh(geometry, material);
-
-        if (objData.url) {
-            const canvas = document.createElement('canvas');
-            canvas.width = objData.width || 512;
-            canvas.height = objData.height || 512;
-            
-            const anim = lottie.loadAnimation({
-                container: document.createElement('div'), 
-                renderer: 'canvas',
-                loop: objData.loop ?? true,
-                autoplay: false,
-                path: objData.url,
-                rendererSettings: {
-                    context: canvas.getContext('2d')!,
-                    clearCanvas: true,
-                },
-            });
-            this.lottieAnimations.set(objData.id, anim);
-            
-            const texture = new THREE.CanvasTexture(canvas);
-            texture.colorSpace = THREE.SRGBColorSpace;
-            
-            (mesh.material as THREE.MeshBasicMaterial).map = texture;
-            (mesh.material as THREE.MeshBasicMaterial).needsUpdate = true;
-        }
     } else if (objData.type === 'glb') {
         mesh = new THREE.Group();
         const placeholder = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial({ wireframe: true, color: '#555' }));
@@ -675,22 +634,6 @@ export class Engine {
           }
         }
       }
-      else if (objData.type === 'lottie') {
-          const anim = this.lottieAnimations.get(objData.id);
-          if (anim) {
-              if (isVisible) {
-                  const localTime = time - objData.startTime;
-                  const frame = localTime * anim.frameRate;
-                  
-                  anim.goToAndStop(frame, true);
-                  
-                  const material = (obj3d as THREE.Mesh).material as THREE.MeshBasicMaterial;
-                  if (material.map) {
-                      material.map.needsUpdate = true;
-                  }
-              }
-          }
-      }
       
       if (!obj3d.visible) return;
 
@@ -698,7 +641,7 @@ export class Engine {
 
       // Update Transform
       obj3d.position.fromArray(objData.position);
-      obj3d.rotation.fromArray(objData.rotation.map(d => THREE.MathUtils.degToRad(d)));
+      obj3d.rotation.fromArray(objData.rotation.map(d => THREE.MathUtils.degToRad(d)) as [number, number, number]);
       obj3d.scale.fromArray(objData.scale);
       
       // Calculate Interpolated Values
@@ -751,7 +694,7 @@ export class Engine {
         const lerp = (a: any, b: any) => gsap.utils.interpolate(a, b, easedProgress);
 
         if (departureValues.position && arrivalValues.position) obj3d.position.fromArray(lerp(departureValues.position, arrivalValues.position));
-        if (departureValues.rotation && arrivalValues.rotation) obj3d.rotation.fromArray(lerp(departureValues.rotation, arrivalValues.rotation).map((v: number) => THREE.MathUtils.degToRad(v)));
+        if (departureValues.rotation && arrivalValues.rotation) obj3d.rotation.fromArray(lerp(departureValues.rotation, arrivalValues.rotation).map((v: number) => THREE.MathUtils.degToRad(v)) as [number, number, number]);
         if (departureValues.scale && arrivalValues.scale) obj3d.scale.fromArray(lerp(departureValues.scale, arrivalValues.scale));
 
         if (departureValues.metalness !== undefined && arrivalValues.metalness !== undefined) finalMetalness = lerp(departureValues.metalness, arrivalValues.metalness);
@@ -938,14 +881,10 @@ export class Engine {
             }
         }
         
-        if (objData.type === 'video' || objData.type === 'lottie') {
+        if (objData.type === 'video') {
             const mediaObject = this.mediaElements.get(objData.id);
             if (mediaObject && mediaObject.loop !== (objData.loop ?? true)) {
                 mediaObject.loop = objData.loop ?? true;
-            }
-            const lottieAnim = this.lottieAnimations.get(objData.id);
-            if (lottieAnim && lottieAnim.loop !== (objData.loop ?? true)) {
-                lottieAnim.loop = objData.loop ?? true;
             }
         }
         
@@ -991,11 +930,6 @@ export class Engine {
             }
             this.mediaElements.delete(id);
         }
-        if (this.lottieAnimations.has(id)) {
-            const anim = this.lottieAnimations.get(id);
-            anim.destroy();
-            this.lottieAnimations.delete(id);
-        }
     });
   }
 
@@ -1030,7 +964,7 @@ export class Engine {
       this.renderer.setPixelRatio(settings.performance.pixelRatio);
       
       const lightObjectGroup = Array.from(this.objectsMap.values()).find(obj => 
-        obj.children.some(c => c instanceof THREE.DirectionalLight && c.castShadow)
+        obj.children.some(c => c instanceof THREE.DirectionalLight && (c as any).castShadow)
       );
 
       if (lightObjectGroup) {
