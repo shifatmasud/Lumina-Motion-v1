@@ -3,7 +3,7 @@ import React, { useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import JSZip from 'jszip';
-import WebMWriter from 'webm-writer';
+import { Muxer, ArrayBufferTarget } from 'webm-muxer';
 import { X, FileArchive, CheckCircle, FileVideo, CircleNotch } from '@phosphor-icons/react';
 
 import { DesignSystem } from '../../theme';
@@ -64,60 +64,116 @@ export const ExportModal: React.FC<ExportModalProps> = ({ isOpen, onClose, engin
         let blob: Blob | null = null;
         let filename: string = '';
 
-        if (settings.format === 'webm') {
-            const writer = new WebMWriter({
-                quality: settings.quality,
-                frameRate: settings.fps,
-            });
-
-            for (let i = 0; i < totalFrames; i++) {
-                if (cancelExportRef.current) { setStatus('cancelled'); return; }
-
-                const time = i * timeStep;
-                engine.setTime(time, objects, false, true, 'arrival');
-                engine.composer.render();
+        try {
+            if (settings.format === 'webm') {
+                const canvas = engine.renderer.domElement;
                 
-                writer.addFrame(engine.renderer.domElement);
-                await new Promise(resolve => setTimeout(resolve, 0)); // Yield to the event loop
-                setProgress((i + 1) / totalFrames);
-            }
-            if (cancelExportRef.current) return;
-            blob = await writer.complete();
-            filename = 'lumina-export.webm';
-        } else {
-            const zip = new JSZip();
-            const pad = totalFrames.toString().length;
+                // Ensure dimensions are even for video encoding
+                const width = canvas.width % 2 === 0 ? canvas.width : canvas.width - 1;
+                const height = canvas.height % 2 === 0 ? canvas.height : canvas.height - 1;
 
-            for (let i = 0; i < totalFrames; i++) {
-                if (cancelExportRef.current) { setStatus('cancelled'); return; }
-                const time = i * timeStep;
-                engine.setTime(time, objects, false, true, 'arrival');
-                engine.composer.render();
-                
-                const frameBlob = await canvasToBlob(engine.renderer.domElement, settings.format, settings.format !== 'png' ? settings.quality : undefined);
-                if (frameBlob) {
-                    zip.file(`frame_${(i).toString().padStart(pad, '0')}.${settings.format}`, frameBlob);
+                const muxer = new Muxer({
+                    target: new ArrayBufferTarget(),
+                    video: {
+                        codec: 'V_VP9',
+                        width: width,
+                        height: height,
+                        frameRate: settings.fps
+                    }
+                });
+
+                const videoEncoder = new VideoEncoder({
+                    output: (chunk, meta) => muxer.addVideoChunk(chunk, meta),
+                    error: (e) => { 
+                        console.error("Video Encoding Error:", e);
+                        cancelExportRef.current = true;
+                    }
+                });
+
+                videoEncoder.configure({
+                    codec: 'vp09.00.10.08',
+                    width: width,
+                    height: height,
+                    bitrate: 10_000_000 // 10 Mbps
+                });
+
+                for (let i = 0; i < totalFrames; i++) {
+                    if (cancelExportRef.current) break;
+
+                    const time = i * timeStep;
+                    engine.setTime(time, objects, false, true, 'arrival');
+                    engine.composer.render();
+                    
+                    const bitmap = await createImageBitmap(canvas);
+                    const timestamp = i * (1_000_000 / settings.fps); // microseconds
+                    
+                    // Throttle encoding if queue is full to prevent OOM
+                    if (videoEncoder.encodeQueueSize > 5) {
+                        await videoEncoder.flush();
+                    }
+
+                    const frame = new VideoFrame(bitmap, { timestamp, duration: 1_000_000 / settings.fps });
+                    videoEncoder.encode(frame, { keyFrame: i % (settings.fps * 2) === 0 });
+                    frame.close();
+                    
+                    // Yield to event loop to allow UI updates
+                    await new Promise(resolve => setTimeout(resolve, 0));
+                    setProgress((i + 1) / totalFrames);
                 }
-                await new Promise(resolve => setTimeout(resolve, 0)); // Yield to the event loop
-                setProgress((i + 1) / totalFrames);
+
+                if (!cancelExportRef.current) {
+                    await videoEncoder.flush();
+                    muxer.finalize();
+                    const { buffer } = muxer.target;
+                    blob = new Blob([buffer], { type: 'video/webm' });
+                    filename = 'lumina-export.webm';
+                }
+
+            } else {
+                // Image Sequence Export (ZIP)
+                const zip = new JSZip();
+                const pad = totalFrames.toString().length;
+
+                for (let i = 0; i < totalFrames; i++) {
+                    if (cancelExportRef.current) break;
+                    const time = i * timeStep;
+                    engine.setTime(time, objects, false, true, 'arrival');
+                    engine.composer.render();
+                    
+                    const frameBlob = await canvasToBlob(engine.renderer.domElement, settings.format, settings.format !== 'png' ? settings.quality : undefined);
+                    if (frameBlob) {
+                        zip.file(`frame_${(i).toString().padStart(pad, '0')}.${settings.format}`, frameBlob);
+                    }
+                    await new Promise(resolve => setTimeout(resolve, 0)); 
+                    setProgress((i + 1) / totalFrames);
+                }
+                
+                if (!cancelExportRef.current) {
+                    blob = await zip.generateAsync({ type: "blob" });
+                    filename = 'lumina-export.zip';
+                }
             }
-            if (cancelExportRef.current) return;
-            blob = await zip.generateAsync({ type: "blob" });
-            filename = 'lumina-export.zip';
+
+            if (cancelExportRef.current) {
+                setStatus('cancelled');
+                return;
+            }
+
+            const url = URL.createObjectURL(blob!);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            setStatus('done');
+
+        } catch (error) {
+            console.error("Export failed:", error);
+            alert("An error occurred during export. Check console for details.");
+            setStatus('cancelled');
         }
-
-        if (cancelExportRef.current) return;
-
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-
-        setStatus('done');
     };
 
     const viewVariants = {
@@ -130,7 +186,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({ isOpen, onClose, engin
         const isSequenceExport = settings.format !== 'webm';
         const infoText = isSequenceExport
             ? 'Exports an image sequence in a ZIP file. Import into any video editor to create a video.'
-            : 'Exports a high-quality WebM video file, ready for sharing.';
+            : 'Exports a high-quality WebM video file using VP9 codec.';
 
         return (
              <div style={{ position: 'relative', minHeight: '280px' }}>

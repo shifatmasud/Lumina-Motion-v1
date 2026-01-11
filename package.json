@@ -19,7 +19,7 @@
     "uuid": "9.0.1",
     "js-yaml": "4.1.0",
     "jszip": "3.10.1",
-    "webm-writer": "0.3.0",
+    "webm-muxer": "5.0.2",
     "cannon-es": "0.20.0"
   },
   "devDependencies": {

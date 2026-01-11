@@ -18,7 +18,7 @@
     "uuid": "https://esm.sh/uuid@9.0.1",
     "js-yaml": "https://esm.sh/js-yaml@4.1.0",
     "jszip": "https://esm.sh/jszip@3.10.1",
-    "webm-writer": "https://esm.sh/webm-writer@0.3.0",
+    "webm-muxer": "https://esm.sh/webm-muxer@5.0.2",
     "cannon-es": "https://esm.sh/cannon-es@0.20.0"
   }
 }
