@@ -8,21 +8,11 @@ export default defineConfig({
     outDir: 'dist',
     sourcemap: true,
     rollupOptions: {
-      external: [
-        'react',
-        'react-dom',
-        'react-dom/client',
-        'three',
-        'framer-motion',
-        'gsap',
-        '@phosphor-icons/react',
-        'uuid',
-        'js-yaml',
-        'jszip',
-        'webm-muxer',
-        'cannon-es',
-        /^three\//, // Match subpaths like three/examples/jsm/...
-      ]
+      output: {
+        manualChunks: {
+          vendor: ['react', 'react-dom', 'three', 'framer-motion', 'gsap'],
+        },
+      },
     }
   },
   define: {
