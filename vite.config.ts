@@ -6,7 +6,24 @@ export default defineConfig({
   base: './',
   build: {
     outDir: 'dist',
-    sourcemap: true
+    sourcemap: true,
+    rollupOptions: {
+      external: [
+        'react',
+        'react-dom',
+        'react-dom/client',
+        'three',
+        'framer-motion',
+        'gsap',
+        '@phosphor-icons/react',
+        'uuid',
+        'js-yaml',
+        'jszip',
+        'webm-muxer',
+        'cannon-es',
+        /^three\//, // Match subpaths like three/examples/jsm/...
+      ]
+    }
   },
   define: {
     global: 'window',
