@@ -3,7 +3,7 @@ import React, { useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import JSZip from 'jszip';
-import { WebMMuxer, ArrayBufferTarget } from 'mediabunny';
+import { Muxer, ArrayBufferTarget } from 'webm-muxer';
 import { X, FileArchive, CheckCircle, FileVideo, CircleNotch } from '@phosphor-icons/react';
 
 import { DesignSystem } from '../../theme';
@@ -72,7 +72,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({ isOpen, onClose, engin
                 const width = canvas.width % 2 === 0 ? canvas.width : canvas.width - 1;
                 const height = canvas.height % 2 === 0 ? canvas.height : canvas.height - 1;
 
-                const muxer = new WebMMuxer({
+                const muxer = new Muxer({
                     target: new ArrayBufferTarget(),
                     video: {
                         codec: 'V_VP9',

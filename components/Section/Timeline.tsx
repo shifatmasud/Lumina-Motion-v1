@@ -412,7 +412,7 @@ const TimelineItem: React.FC<{
             }}
         >
             <motion.div 
-                drag={!isLocked && "x"}
+                drag={isLocked ? false : "x"}
                 dragMomentum={false}
                 dragElastic={0}
                 onDragEnd={handleClipDragEnd}
