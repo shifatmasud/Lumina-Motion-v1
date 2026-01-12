@@ -1,6 +1,5 @@
 
 
-
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, Reorder, AnimatePresence, useDragControls, useMotionValue, useTransform } from 'framer-motion';
@@ -494,4 +493,389 @@ const TimelineItem: React.FC<{
 
                 <div style={{ padding: '0 8px', height: '100%', display: 'flex', alignItems: 'center', pointerEvents: 'none', overflow: 'hidden' }}>
                     <span style={{ ...DesignSystem.Type.Label.S, fontSize: '10px', color: isSelected ? DesignSystem.Color.Accent.Content[1] : DesignSystem.Color.Base.Content[2], whiteSpace: 'nowrap' }}>
-                        {obj.type === 'video' ? 'VIDEO CLIP' :
+                        {obj.type === 'video' ? 'VIDEO CLIP' : (obj.type === 'camera' ? 'CAMERA SEQUENCE' : (obj.type === 'audio' ? 'AUDIO TRACK' : 'ANIMATION SEQUENCE'))}
+                    </span>
+                </div>
+
+                {/* Keyframes visualization */}
+                {obj.animations?.map((kf, index) => {
+                  const isKfSelected = selectedKeyframe?.id === obj.id && selectedKeyframe.index === index;
+                  return (
+                    <div
+                      key={`${obj.id}-${index}-${kf.time}`}
+                      onClick={(e) => { e.stopPropagation(); onSelectKeyframe(obj.id, index); }}
+                      title={kf.name || `Keyframe at ${kf.time.toFixed(2)}s`}
+                      style={{
+                        position: 'absolute',
+                        left: `${kf.time * pixelsPerSecond}px`,
+                        bottom: '-5px',
+                        width: '24px',
+                        height: '24px',
+                        transform: 'translateX(-50%)',
+                        cursor: 'pointer',
+                        zIndex: 10,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <div
+                        style={{
+                          transform: 'rotate(45deg)',
+                          width: isKfSelected ? '10px' : '6px',
+                          height: isKfSelected ? '10px' : '6px',
+                          background: isKfSelected ? DesignSystem.Color.Feedback.Warning : '#fff',
+                          border: isKfSelected ? `2px solid ${DesignSystem.Color.Base.Surface[1]}` : 'none',
+                          borderRadius: '1px',
+                          boxShadow: '0 1px 2px rgba(0,0,0,0.5)',
+                          transition: 'all 0.1s',
+                        }}
+                      />
+                    </div>
+                  );
+                })}
+            </motion.div>
+        </div>
+      </div>
+      <AnimatePresence>
+          {showMenu && menuRect && (
+              <TrackContextMenu 
+                  rect={menuRect} 
+                  trackObject={obj}
+                  onClose={() => setShowMenu(false)} 
+                  onRemove={() => onRemove(obj.id)} 
+                  onSplit={() => onSplit(obj.id)} 
+                  onDuplicate={() => onDuplicate(obj.id)}
+                  onRename={startRenaming}
+                  onResetCamera={obj.type === 'camera' ? handleResetCamera : undefined}
+                  onUpdateObject={onUpdateObject}
+                  onCopyAllKeyframes={() => onCopyAllKeyframesAsYaml(obj.id)}
+                  onPasteAllKeyframes={() => onPasteAllKeyframesFromYaml(obj.id)}
+                  onRemoveAllKeyframes={() => onRemoveAllKeyframes(obj.id)}
+                  copiedKeyframeYaml={copiedKeyframeYaml}
+              />
+          )}
+      </AnimatePresence>
+    </Reorder.Item>
+  );
+};
+
+export const TimelineSequencer: React.FC<TimelineProps> = ({ 
+    objects, setObjects, selectedId, onSelect, isPlaying, onTogglePlay,
+    currentTime, setCurrentTime, totalDuration, onAddKeyframe, selectedKeyframe, 
+    onSelectKeyframe, onRemoveKeyframe, isSnappingEnabled,
+    onCopyAllKeyframesAsYaml, onPasteAllKeyframesFromYaml, onRemoveAllKeyframes, copiedKeyframeYaml
+}) => {
+  const pixelsPerSecond = 100;
+  const trackHeaderWidth = 160;
+  const timelineContainerRef = useRef<HTMLDivElement>(null);
+  const rulerRef = useRef<HTMLDivElement>(null);
+  const isDraggingPlayhead = useRef(false);
+  const [isScrubbing, setIsScrubbing] = useState(false);
+  
+  // Use motion values for smooth, non-render-blocking playhead animation
+  const motionCurrentTime = useMotionValue(currentTime);
+  const playheadX = useTransform(motionCurrentTime, (time) => time * pixelsPerSecond);
+
+  useEffect(() => {
+    // Sync motion value when currentTime prop changes from state
+    motionCurrentTime.set(currentTime);
+  }, [currentTime, motionCurrentTime]);
+  
+  const handleRemoveObject = (id: string) => {
+    setObjects(prev => prev.filter(obj => obj.id !== id && !obj.locked));
+  };
+  
+  const handleUpdateObject = (id: string, updates: Partial<SceneObject>) => {
+    setObjects(prev => prev.map(o => o.id === id ? { ...o, ...updates } : o));
+  };
+
+  const handleDuplicate = (id: string) => {
+      const obj = objects.find(o => o.id === id);
+      if (!obj) return;
+      const newObj = { ...obj, id: uuidv4(), startTime: obj.startTime + 0.5, name: `${obj.name || obj.type} Copy` };
+      setObjects(prev => [...prev, newObj]);
+  };
+
+  const handleSplit = (idToSplit: string) => {
+      const objectToSplit = objects.find(o => o.id === idToSplit);
+      if (!objectToSplit || currentTime <= objectToSplit.startTime || currentTime >= objectToSplit.startTime + objectToSplit.duration) {
+          return;
+      }
+      const splitOffset = currentTime - objectToSplit.startTime;
+      const newDuration1 = splitOffset;
+      const newDuration2 = objectToSplit.duration - splitOffset;
+
+      const newObject1 = { ...objectToSplit, duration: newDuration1 };
+      const newObject2 = { ...objectToSplit, id: uuidv4(), startTime: currentTime, duration: newDuration2, animations: [], name: `${objectToSplit.name || objectToSplit.type} Split` }; 
+      
+      setObjects(prev => prev.map(o => o.id === idToSplit ? newObject1 : o).concat(newObject2));
+  };
+
+  const onScrubberPointerDown = useCallback((e: React.PointerEvent<HTMLElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (!timelineContainerRef.current) return;
+    const scrollContainer = timelineContainerRef.current;
+
+    isDraggingPlayhead.current = true;
+    setIsScrubbing(true);
+    if (isPlaying) onTogglePlay();
+
+    const handleInteraction = (event: PointerEvent) => {
+        const scrollContainerRect = scrollContainer.getBoundingClientRect();
+        const clickInContainer = event.clientX - scrollContainerRect.left;
+        const contentX = scrollContainer.scrollLeft + clickInContainer;
+        const timeAreaX = contentX - trackHeaderWidth;
+
+        const newTime = Math.max(0, timeAreaX / pixelsPerSecond);
+        
+        const finalTime = isSnappingEnabled ? Math.round(newTime / SNAP_INTERVAL) * SNAP_INTERVAL : newTime;
+
+        const clampedTime = Math.min(finalTime, totalDuration);
+        setCurrentTime(clampedTime);
+    };
+    
+    handleInteraction(e as PointerEvent);
+
+    const onPointerMove = (moveEvent: PointerEvent) => {
+        if (isDraggingPlayhead.current) {
+            handleInteraction(moveEvent);
+        }
+    };
+    
+    const onPointerUp = () => {
+        isDraggingPlayhead.current = false;
+        setIsScrubbing(false);
+        window.removeEventListener('pointermove', onPointerMove);
+        window.removeEventListener('pointerup', onPointerUp);
+    };
+    
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', onPointerUp);
+  }, [isPlaying, onTogglePlay, pixelsPerSecond, setCurrentTime, totalDuration, isSnappingEnabled]);
+  
+
+  useEffect(() => {
+      if (isPlaying && timelineContainerRef.current) {
+          const playheadX = currentTime * pixelsPerSecond;
+          const container = timelineContainerRef.current;
+          const center = container.clientWidth / 2;
+          
+          if (playheadX > container.scrollLeft + center || playheadX < container.scrollLeft) {
+             container.scrollTo({ left: playheadX - center, behavior: 'auto' });
+          }
+      }
+  }, [currentTime, isPlaying, pixelsPerSecond]);
+
+  const totalWidth = totalDuration * pixelsPerSecond + trackHeaderWidth;
+
+  const renderRulerTicks = () => {
+    const ticks = [];
+    for (let i = 0; i <= totalDuration; i++) {
+        // Major Tick (Seconds)
+        ticks.push(
+            <div key={i} style={{ position: 'absolute', left: i * pixelsPerSecond, top: 0, height: '100%', pointerEvents: 'none', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', borderLeft: `1px solid ${DesignSystem.Color.Base.Content[3]}` }}>
+                <span style={{ marginLeft: '4px', marginBottom: '2px', fontSize: '9px', fontFamily: DesignSystem.Type.Label.S.fontFamily, color: DesignSystem.Color.Base.Content[3], fontWeight: 500 }}>{i}s</span>
+            </div>
+        );
+        // Half-second tick (Minimalist)
+        if (i < totalDuration) {
+             ticks.push(
+                <div key={`${i}-half`} style={{ position: 'absolute', left: (i + 0.5) * pixelsPerSecond, bottom: 0, width: '1px', height: '6px', background: DesignSystem.Color.Base.Content[3], opacity: 0.3 }} />
+            );
+        }
+    }
+    return ticks;
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: DesignSystem.Color.Base.Surface[1], userSelect: 'none' }}>
+        {/* Toolbar */}
+        <div style={{ height: '48px', borderBottom: `1px solid ${DesignSystem.Color.Base.Border[1]}`, display: 'flex', alignItems: 'center', padding: `0 ${DesignSystem.Space(2)}`, gap: DesignSystem.Space(2), background: DesignSystem.Color.Base.Surface['3b'], backdropFilter: 'blur(20px)', zIndex: 20 }}>
+             <Button active={isPlaying} onClick={onTogglePlay} style={{ width: '36px', height: '36px', borderRadius: '50%' }}>
+                 {isPlaying ? <Pause weight="fill" size={16} /> : <Play weight="fill" size={16} />}
+             </Button>
+             <div style={{ display: 'flex', flexDirection: 'column' }}>
+                 <span style={{ ...DesignSystem.Type.Label.S, color: DesignSystem.Color.Accent.Content[2], fontSize: '16px' }}>
+                    {Math.floor(currentTime / 60).toString().padStart(2, '0')}:{(currentTime % 60).toFixed(2).padStart(5, '0')}
+                 </span>
+                 <span style={{ ...DesignSystem.Type.Label.S, color: DesignSystem.Color.Base.Content[3], fontSize: '9px' }}>
+                    {Math.floor(currentTime * 24)} FRAMES
+                 </span>
+             </div>
+             
+             <div style={{ flex: 1 }} />
+             
+             <div style={{ display: 'flex', gap: '8px' }}>
+                <Button onClick={() => setCurrentTime(0)} variant="ghost" style={{ padding: '0 8px' }}>
+                    <span style={DesignSystem.Type.Label.S}>RESET</span>
+                </Button>
+                <div style={{ width: '1px', height: '20px', background: DesignSystem.Color.Base.Border[1], alignSelf: 'center' }} />
+                <Button onClick={onAddKeyframe} disabled={!selectedId} variant="primary" style={{ padding: '0 12px', height: '32px' }}>
+                    <Diamond size={14} style={{ marginRight: '6px' }} weight="fill" /> 
+                    KEYFRAME
+                </Button>
+             </div>
+        </div>
+
+        {/* Scrollable Timeline Area */}
+        <div 
+            ref={timelineContainerRef} 
+            style={{ 
+                flex: 1, 
+                position: 'relative', 
+                overflow: 'auto', 
+                background: '#080808',
+                overscrollBehavior: 'none' 
+            }}
+        >
+            <div style={{ minWidth: `${totalWidth}px`, height: '100%', display: 'flex', flexDirection: 'column', position: 'relative' }}>
+                
+                {/* Sticky Ruler Container */}
+                <div 
+                    ref={rulerRef}
+                    onPointerDown={onScrubberPointerDown}
+                    style={{ 
+                        position: 'sticky', 
+                        top: 0, 
+                        height: '48px',
+                        background: DesignSystem.Color.Base.Surface[2], 
+                        borderBottom: `1px solid ${DesignSystem.Color.Base.Border[1]}`, 
+                        display: 'flex', 
+                        zIndex: 30,
+                        width: '100%',
+                        cursor: 'ew-resize',
+                        touchAction: 'none' 
+                    }}
+                >
+                    {/* Corner */}
+                    <div style={{ 
+                        width: `${trackHeaderWidth}px`, 
+                        flexShrink: 0, 
+                        borderRight: `1px solid ${DesignSystem.Color.Base.Border[1]}`, 
+                        background: DesignSystem.Color.Base.Surface[2],
+                        position: 'sticky',
+                        left: 0,
+                        zIndex: 31,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: DesignSystem.Color.Base.Content[3],
+                        fontSize: '10px',
+                        fontWeight: 600
+                    }}>
+                        TIMELINE
+                    </div>
+
+                    {/* Time Marks */}
+                    <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
+                         {renderRulerTicks()}
+                    </div>
+                </div>
+
+                {/* PLAYHEAD */}
+                <motion.div
+                    style={{
+                        position: 'absolute',
+                        left: `calc(${trackHeaderWidth}px - 12px)`,
+                        top: '48px', // Start below the ruler
+                        bottom: 0,
+                        x: playheadX,
+                        width: '24px',
+                        zIndex: 50,
+                        pointerEvents: 'none',
+                    }}
+                >
+                    {/* Line */}
+                    <div style={{
+                        position: 'absolute',
+                        left: '12px',
+                        top: 0,
+                        width: '1px',
+                        height: '100%', // Span the track area
+                        background: DesignSystem.Color.Accent.Surface[1],
+                        boxShadow: `0 0 4px ${DesignSystem.Color.Accent.Surface[1]}`,
+                        opacity: 0.8
+                    }} />
+
+                    {/* Diamond Handle (Positioned relative to its parent, moving up into the ruler) */}
+                    <div style={{
+                        position: 'absolute',
+                        top: '-29px',
+                        left: '7px',
+                        width: '10px',
+                        height: '10px',
+                        transform: 'rotate(45deg)',
+                        background: DesignSystem.Color.Accent.Surface[1],
+                        borderRadius: '2px',
+                        border: `1px solid ${DesignSystem.Color.Base.Surface[1]}`,
+                        boxShadow: '0 2px 4px rgba(0,0,0,0.5)'
+                    }} />
+                </motion.div>
+
+                {/* Tracks Area */}
+                <div style={{ position: 'relative', flex: 1, minHeight: '150px' }}>
+                    {/* Background Grid */}
+                    <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', paddingLeft: `${trackHeaderWidth}px` }}>
+                         {Array.from({ length: totalDuration + 1 }).map((_, i) => (
+                            <div key={i} style={{ 
+                                position: 'absolute', 
+                                left: `${trackHeaderWidth + i * pixelsPerSecond}px`, 
+                                top: 0, 
+                                bottom: 0, 
+                                width: '1px', 
+                                background: 'rgba(255,255,255,0.03)' 
+                            }} />
+                        ))}
+                    </div>
+
+                    {/* Sortable Tracks */}
+                    <Reorder.Group axis="y" values={objects} onReorder={setObjects} style={{ margin: 0, padding: 0, minHeight: '100px' }}>
+                        {objects.map(obj => (
+                            <TimelineItem 
+                                key={obj.id} 
+                                obj={obj} 
+                                isSelected={selectedId === obj.id} 
+                                pixelsPerSecond={pixelsPerSecond} 
+                                onClick={() => onSelect(obj.id)} 
+                                onRemove={handleRemoveObject} 
+                                onSplit={handleSplit}
+                                onDuplicate={handleDuplicate}
+                                onUpdateObject={handleUpdateObject}
+                                selectedKeyframe={selectedKeyframe}
+                                onSelectKeyframe={onSelectKeyframe}
+                                isSnappingEnabled={isSnappingEnabled}
+                                onCopyAllKeyframesAsYaml={onCopyAllKeyframesAsYaml}
+                                onPasteAllKeyframesFromYaml={onPasteAllKeyframesFromYaml}
+                                onRemoveAllKeyframes={onRemoveAllKeyframes}
+                                copiedKeyframeYaml={copiedKeyframeYaml}
+                            />
+                        ))}
+                    </Reorder.Group>
+                    
+                    {/* Empty State */}
+                    {objects.length === 0 && (
+                        <div style={{ 
+                            height: '200px', 
+                            display: 'flex', 
+                            flexDirection: 'column', 
+                            alignItems: 'center', 
+                            justifyContent: 'center', 
+                            gap: '12px',
+                            color: DesignSystem.Color.Base.Content[3] 
+                        }}>
+                             <Diamond size={32} weight="duotone" />
+                             <span style={DesignSystem.Type.Label.S}>NO OBJECTS IN SEQUENCE</span>
+                             <Button variant="ghost" onClick={onAddKeyframe} style={{ fontSize: '10px' }}>+ ADD OBJECT FROM ASSETS</Button>
+                        </div>
+                    )}
+                    
+                    <div style={{ height: '100px' }} />
+                </div>
+            </div>
+        </div>
+    </div>
+  );
+};

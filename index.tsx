@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import { v4 as uuidv4 } from 'uuid';
@@ -26,10 +25,8 @@ import './index.css';
 const App = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   const engineRef = useRef<Engine | null>(null);
-  // Initialized with undefined to satisfy "Expected 1 arguments, but got 0" error
-  const animationFrameRef = useRef<number | undefined>(undefined);
-  // Initialized with undefined to satisfy "Expected 1 arguments, but got 0" error
-  const lastTimeRef = useRef<number | undefined>(undefined);
+  const animationFrameRef = useRef<number>();
+  const lastTimeRef = useRef<number>();
   const prevTimeRef = useRef(0);
 
   // --- State ---
