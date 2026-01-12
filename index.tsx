@@ -109,7 +109,17 @@ const App = () => {
 
   return (
     <div style={{ width: '100%', height: '100%', position: 'relative', overflow: 'hidden', background: DesignSystem.Color.Base.Surface[1] }}>
-      <div ref={containerRef} style={{ zIndex: 0 }} />
+      <div
+        ref={containerRef}
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
+          zIndex: 0,
+        }}
+      />
 
       <ExportModal
         isOpen={showExportModal}
@@ -131,8 +141,8 @@ const App = () => {
             onAddObject={(type, url, width, height) => scene.handleAddObject(type, currentTime, url, width, height)}
             onExportVideo={() => setShowExportModal(true)} 
             onExportYaml={handleExportYaml} 
-            onFileDrop={scene.handleDrop} 
-            onFileUpload={scene.handleFileUpload} 
+            onFileDrop={(e) => scene.handleDrop(e, currentTime)} 
+            onFileUpload={(e) => scene.handleFileUpload(e, currentTime)} 
         />
       </Window>
 
@@ -214,7 +224,7 @@ const App = () => {
             totalDuration={totalDuration} 
             onAddKeyframe={() => scene.handleAddKeyframe(currentTime)} 
             selectedKeyframe={selectedKeyframe}
-            onSelectKeyframe={scene.handleSelectKeyframe}
+            onSelectKeyframe={(id, index) => scene.handleSelectKeyframe(id, index, setCurrentTime)}
             onRemoveKeyframe={scene.handleRemoveKeyframe}
             isSnappingEnabled={scene.isSnappingEnabled}
             onCopyAllKeyframesAsYaml={scene.handleCopyAllKeyframesAsYaml}
