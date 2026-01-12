@@ -1,6 +1,7 @@
 {
   "imports": {
     "react": "https://esm.sh/react@18.2.0",
+    "react-dom": "https://esm.sh/react-dom@18.2.0",
     "react-dom/client": "https://esm.sh/react-dom@18.2.0/client?deps=react@18.2.0",
     "three": "https://esm.sh/three@0.180.0",
     "three/examples/jsm/controls/OrbitControls": "https://esm.sh/three@0.180.0/examples/jsm/controls/OrbitControls?deps=three@0.180.0",
