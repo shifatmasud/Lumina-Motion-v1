@@ -1,5 +1,4 @@
 
-
 import React, { useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -21,6 +20,8 @@ interface ExportModalProps {
 
 type ExportFormat = 'png' | 'jpeg' | 'webp' | 'webm';
 type ExportStatus = 'idle' | 'exporting' | 'done' | 'cancelled';
+
+const FRAMES_PER_BATCH = 5; // Process this many frames before yielding control to the browser
 
 export const ExportModal: React.FC<ExportModalProps> = ({ isOpen, onClose, engine, objects, totalDuration }) => {
     const [settings, setSettings] = useState({
@@ -75,12 +76,15 @@ export const ExportModal: React.FC<ExportModalProps> = ({ isOpen, onClose, engin
                 if (cancelExportRef.current) { setStatus('cancelled'); return; }
 
                 const time = i * timeStep;
-                // FIX: Removed extra 'arrival' argument from setTime call.
                 engine.setTime(time, objects, false, true);
                 engine.composer.render();
                 
                 writer.addFrame(engine.renderer.domElement);
-                await new Promise(resolve => setTimeout(resolve, 0)); // Yield to the event loop
+                
+                // Yield to the event loop periodically to prevent UI freezes
+                if ((i + 1) % FRAMES_PER_BATCH === 0 || i === totalFrames - 1) {
+                    await new Promise(resolve => setTimeout(resolve, 0)); 
+                }
                 setProgress((i + 1) / totalFrames);
             }
             if (cancelExportRef.current) return;
@@ -93,19 +97,26 @@ export const ExportModal: React.FC<ExportModalProps> = ({ isOpen, onClose, engin
             for (let i = 0; i < totalFrames; i++) {
                 if (cancelExportRef.current) { setStatus('cancelled'); return; }
                 const time = i * timeStep;
-                // FIX: Removed extra 'arrival' argument from setTime call.
                 engine.setTime(time, objects, false, true);
                 engine.composer.render();
                 
+                // canvasToBlob is already async, so it yields.
+                // zip.file is synchronous but typically fast per call.
                 const frameBlob = await canvasToBlob(engine.renderer.domElement, settings.format, settings.format !== 'png' ? settings.quality : undefined);
                 if (frameBlob) {
                     zip.file(`frame_${(i).toString().padStart(pad, '0')}.${settings.format}`, frameBlob);
                 }
-                await new Promise(resolve => setTimeout(resolve, 0)); // Yield to the event loop
+                
+                // Yield to the event loop periodically to prevent UI freezes
+                if ((i + 1) % FRAMES_PER_BATCH === 0 || i === totalFrames - 1) {
+                    await new Promise(resolve => setTimeout(resolve, 0)); 
+                }
                 setProgress((i + 1) / totalFrames);
             }
             if (cancelExportRef.current) return;
-            blob = await zip.generateAsync({ type: "blob" });
+            // The compression itself in generateAsync is highly optimized and often uses Web Workers internally,
+            // so it's inherently non-blocking for the main thread during the heavy part.
+            blob = await zip.generateAsync({ type: "blob", compression: "DEFLATE", compressionOptions: { level: 9 } });
             filename = 'lumina-export.zip';
         }
 
@@ -255,3 +266,4 @@ export const ExportModal: React.FC<ExportModalProps> = ({ isOpen, onClose, engin
         document.body
     );
 };
+    

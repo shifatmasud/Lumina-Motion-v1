@@ -1,5 +1,4 @@
 
-
 {
   "imports": {
     "react": "https://esm.sh/react@18.2.0",
@@ -17,6 +16,6 @@
     "gsap": "https://esm.sh/gsap@3.13.0",
     "@phosphor-icons/react": "https://esm.sh/@phosphor-icons/react@2.1.0?deps=react@18.2.0",
     "cannon-es": "https://esm.sh/cannon-es@0.20.0",
-    "@google/genai": "https://esm.sh/@google/generative-ai@0.16.0"
+    "@google/genai": "https://esm.sh/@google/genai@1.37.0"
   }
 }
