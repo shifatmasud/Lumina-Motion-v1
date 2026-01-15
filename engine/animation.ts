@@ -1,8 +1,9 @@
 
+
 import * as THREE from 'three';
 import gsap from 'gsap';
 import { SceneObject, TimelineKeyframe } from './types';
-import type { Engine } from './core';
+import type { Engine } from '../core';
 import { updateSVGGeometry } from './object';
 
 export function setTime(engine: Engine, time: number, objects: SceneObject[], isPlaying: boolean, timeHasChanged: boolean) {
@@ -70,7 +71,8 @@ export function setTime(engine: Engine, time: number, objects: SceneObject[], is
 
       // Update Transform
       obj3d.position.fromArray(objData.position);
-      obj3d.rotation.fromArray(objData.rotation.map(d => THREE.MathUtils.degToRad(d)));
+      // FIX: Cast mapped array to a tuple to satisfy Euler.fromArray's type requirement.
+      obj3d.rotation.fromArray(objData.rotation.map(d => THREE.MathUtils.degToRad(d)) as [number, number, number]);
       obj3d.scale.fromArray(objData.scale);
       
       // Calculate Interpolated Values

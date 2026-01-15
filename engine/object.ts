@@ -1,9 +1,10 @@
 
+
 import * as THREE from 'three';
-import { SVGLoader } from 'three/examples/jsm/loaders/SVGLoader';
-import lottie from 'lottie-web';
+import { SVGLoader } from 'three/examples/jsm/loaders/SVGLoader.js';
+import lottie from 'https://esm.sh/lottie-web@^5.13.0';
 import { SceneObject } from './types';
-import type { Engine } from './core';
+import type { Engine } from '../core';
 import { chromaKeyVertexShader, chromaKeyFragmentShader } from './shaders';
 
 export function updateSVGGeometry(mesh: THREE.Group, objData: SceneObject) {
@@ -241,8 +242,11 @@ export function createMesh(engine: Engine, objData: SceneObject): THREE.Object3D
             const texture = new THREE.CanvasTexture(canvas);
             texture.colorSpace = THREE.SRGBColorSpace;
             
-            (mesh.material as THREE.MeshBasicMaterial).map = texture;
-            (mesh.material as THREE.MeshBasicMaterial).needsUpdate = true;
+            // FIX: Add type guard to ensure mesh is a THREE.Mesh before accessing .material
+            if (mesh instanceof THREE.Mesh && mesh.material instanceof THREE.MeshBasicMaterial) {
+                mesh.material.map = texture;
+                mesh.material.needsUpdate = true;
+            }
         }
     } else if (objData.type === 'glb') {
         mesh = new THREE.Group();

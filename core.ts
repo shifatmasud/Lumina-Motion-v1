@@ -1,16 +1,16 @@
 
 import * as THREE from 'three';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
-import { SVGLoader } from 'three/examples/jsm/loaders/SVGLoader';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { SVGLoader } from 'three/examples/jsm/loaders/SVGLoader.js';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { VignetteShader } from 'three/examples/jsm/shaders/VignetteShader.js';
-import { SceneObject, GlobalSettings } from './types';
-import { createMesh } from './object';
-import { setTime as applyTime } from './animation';
+import { SceneObject, GlobalSettings } from './engine/types';
+import { createMesh } from './engine/object';
+import { setTime as applyTime } from './engine/animation';
 
 export class Engine {
   scene: THREE.Scene;

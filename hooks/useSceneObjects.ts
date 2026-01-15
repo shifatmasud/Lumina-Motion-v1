@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import yaml from 'js-yaml';
@@ -130,19 +131,15 @@ export const useSceneObjects = (
         }
     };
   
-    const handleSelectKeyframe = (id: string, index: number, setCurrentTime: (time: number) => void) => {
+    // FIX: Removed setCurrentTime parameter to decouple this hook from the playback hook.
+    // The parent component (`index.tsx`) now uses a useEffect to handle this side effect.
+    const handleSelectKeyframe = (id: string, index: number) => {
         if (selectedKeyframe?.id === id && selectedKeyframe.index === index) {
             setSelectedKeyframe(null); 
         } else {
             setSelectedId(id); 
             setSelectedKeyframe({ id, index });
             setShowProperties(true);
-
-            const obj = objects.find(o => o.id === id);
-            const kf = obj?.animations[index];
-            if (obj && kf) {
-                setCurrentTime(obj.startTime + kf.time);
-            }
         }
     };
 

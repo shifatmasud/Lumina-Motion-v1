@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
 import { DesignSystem } from './theme';
@@ -47,6 +48,17 @@ const App = () => {
   );
   
   // --- Effects ---
+  
+  // FIX: This useEffect handles moving the playhead when a keyframe is selected.
+  // This decouples the selection logic in useSceneObjects from the playback logic in usePlayback.
+  useEffect(() => {
+    if (selectedKeyframe && selectedObject) {
+      const kf = selectedObject.animations?.[selectedKeyframe.index];
+      if (kf) {
+        setCurrentTime(selectedObject.startTime + kf.time);
+      }
+    }
+  }, [selectedKeyframe, selectedObject, setCurrentTime]);
   
   const adjustColor = (color: string, amount: number) => {
       return '#' + color.replace(/^#/, '').match(/.{1,2}/g)!.map(c => Math.max(0, Math.min(255, parseInt(c, 16) + amount)).toString(16).padStart(2, '0')).join('');
@@ -131,8 +143,9 @@ const App = () => {
             onAddObject={(type, url, width, height) => scene.handleAddObject(type, currentTime, url, width, height)}
             onExportVideo={() => setShowExportModal(true)} 
             onExportYaml={handleExportYaml} 
-            onFileDrop={scene.handleDrop} 
-            onFileUpload={scene.handleFileUpload} 
+            // FIX: Pass `currentTime` to file drop/upload handlers.
+            onFileDrop={(e) => scene.handleDrop(e, currentTime)} 
+            onFileUpload={(e) => scene.handleFileUpload(e, currentTime)} 
         />
       </Window>
 
@@ -214,6 +227,7 @@ const App = () => {
             totalDuration={totalDuration} 
             onAddKeyframe={() => scene.handleAddKeyframe(currentTime)} 
             selectedKeyframe={selectedKeyframe}
+            // FIX: The signature of handleSelectKeyframe was corrected in the hook, so this prop assignment is now valid.
             onSelectKeyframe={scene.handleSelectKeyframe}
             onRemoveKeyframe={scene.handleRemoveKeyframe}
             isSnappingEnabled={scene.isSnappingEnabled}

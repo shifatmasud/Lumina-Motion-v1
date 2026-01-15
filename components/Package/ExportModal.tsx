@@ -1,9 +1,10 @@
 
+
 import React, { useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import JSZip from 'jszip';
-import WebMWriter from 'webm-writer';
+import WebMWriter from 'https://esm.sh/webm-writer@^1.0.0';
 import { X, FileArchive, CheckCircle, FileVideo, CircleNotch } from '@phosphor-icons/react';
 
 import { DesignSystem } from '../../theme';
@@ -74,7 +75,8 @@ export const ExportModal: React.FC<ExportModalProps> = ({ isOpen, onClose, engin
                 if (cancelExportRef.current) { setStatus('cancelled'); return; }
 
                 const time = i * timeStep;
-                engine.setTime(time, objects, false, true, 'arrival');
+                // FIX: Removed extra 'arrival' argument from setTime call.
+                engine.setTime(time, objects, false, true);
                 engine.composer.render();
                 
                 writer.addFrame(engine.renderer.domElement);
@@ -91,7 +93,8 @@ export const ExportModal: React.FC<ExportModalProps> = ({ isOpen, onClose, engin
             for (let i = 0; i < totalFrames; i++) {
                 if (cancelExportRef.current) { setStatus('cancelled'); return; }
                 const time = i * timeStep;
-                engine.setTime(time, objects, false, true, 'arrival');
+                // FIX: Removed extra 'arrival' argument from setTime call.
+                engine.setTime(time, objects, false, true);
                 engine.composer.render();
                 
                 const frameBlob = await canvasToBlob(engine.renderer.domElement, settings.format, settings.format !== 'png' ? settings.quality : undefined);

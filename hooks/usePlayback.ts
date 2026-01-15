@@ -1,4 +1,5 @@
 
+
 import { useState, useEffect, useRef } from 'react';
 import { SceneObject } from '../engine';
 
@@ -6,12 +7,15 @@ export const usePlayback = (objects: SceneObject[]) => {
   const [totalDuration, setTotalDuration] = useState(5); // in seconds
   const [currentTime, setCurrentTime] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
-  const animationFrameRef = useRef<number>();
-  const lastTimeRef = useRef<number>();
+  // FIX: Initialize useRef with a type that allows for an undefined initial value, as no initial value is provided.
+  const animationFrameRef = useRef<number | undefined>();
+  // FIX: Initialize useRef with a type that allows for an undefined initial value, as no initial value is provided.
+  const lastTimeRef = useRef<number | undefined>();
 
   useEffect(() => {
     const endTimes = objects.map(o => o.startTime + o.duration);
-    const maxEndTime = Math.max(0, ...endTimes);
+    // FIX: Use reduce for a safer way to find the max value, avoiding spread on empty array issues.
+    const maxEndTime = endTimes.reduce((max, time) => Math.max(max, time), 0);
     setTotalDuration(Math.max(5, maxEndTime));
   }, [objects]);
 
