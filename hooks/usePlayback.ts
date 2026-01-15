@@ -1,5 +1,4 @@
 
-
 import { useState, useEffect, useRef } from 'react';
 import { SceneObject } from '../engine';
 
@@ -8,9 +7,9 @@ export const usePlayback = (objects: SceneObject[]) => {
   const [currentTime, setCurrentTime] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   // FIX: Initialize useRef with a type that allows for an undefined initial value, as no initial value is provided.
-  const animationFrameRef = useRef<number | undefined>();
+  const animationFrameRef = useRef<number | undefined>(undefined);
   // FIX: Initialize useRef with a type that allows for an undefined initial value, as no initial value is provided.
-  const lastTimeRef = useRef<number | undefined>();
+  const lastTimeRef = useRef<number | undefined>(undefined);
 
   useEffect(() => {
     const endTimes = objects.map(o => o.startTime + o.duration);

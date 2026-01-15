@@ -3,7 +3,7 @@
 import React, { useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import JSZip from 'jszip';
+import JSZip from 'https://esm.sh/jszip@3.10.1';
 import WebMWriter from 'https://esm.sh/webm-writer@^1.0.0';
 import { X, FileArchive, CheckCircle, FileVideo, CircleNotch } from '@phosphor-icons/react';
 

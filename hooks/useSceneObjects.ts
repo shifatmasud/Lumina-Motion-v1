@@ -1,8 +1,8 @@
 
 
 import React, { useState, useEffect } from 'react';
-import { v4 as uuidv4 } from 'uuid';
-import yaml from 'js-yaml';
+import { v4 as uuidv4 } from 'https://esm.sh/uuid@9.0.1';
+import yaml from 'https://esm.sh/js-yaml@4.1.0';
 import JSZip from 'jszip';
 import { SceneObject, TimelineKeyframe } from '../engine';
 import { INITIAL_OBJECTS, defaultTransition } from '../constants';

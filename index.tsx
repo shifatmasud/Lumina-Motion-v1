@@ -19,6 +19,7 @@ import { useUIState } from './hooks/useUIState';
 import { usePlayback } from './hooks/usePlayback';
 import { useSceneObjects } from './hooks/useSceneObjects';
 import { useEngine } from './hooks/useEngine';
+import { GoogleGenAI } from "@google/genai";
 
 import './index.css';
 
