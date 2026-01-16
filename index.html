@@ -6,41 +6,36 @@
     <title>Lumina</title>
     <link rel="stylesheet" href="./index.css">
     
+    <!-- Load stable import map first -->
+    <script src="./importmap.js" type="importmap"></script>
+    
+    <!-- Comment out conflicting inline import map (React 19) -->
+    <!-- 
     <script type="importmap">
 {
   "imports": {
-    "react": "https://esm.sh/react@19.0.0",
-    "react-dom": "https://esm.sh/react-dom@19.0.0",
-    "react-dom/client": "https://esm.sh/react-dom@19.0.0/client",
-    "three": "https://esm.sh/three@0.180.0",
-    "three/examples/jsm/controls/OrbitControls": "https://esm.sh/three@0.180.0/examples/jsm/controls/OrbitControls?deps=three@0.180.0",
-    "three/examples/jsm/loaders/GLTFLoader": "https://esm.sh/three@0.180.0/examples/jsm/loaders/GLTFLoader?deps=three@0.180.0",
-    "three/examples/jsm/loaders/SVGLoader": "https://esm.sh/three@0.180.0/examples/jsm/loaders/SVGLoader?deps=three@0.180.0",
-    "three/examples/jsm/postprocessing/EffectComposer": "https://esm.sh/three@0.180.0/examples/jsm/postprocessing/EffectComposer?deps=three@0.180.0",
-    "three/examples/jsm/postprocessing/RenderPass": "https://esm.sh/three@0.180.0/examples/jsm/postprocessing/RenderPass?deps=three@0.180.0",
-    "three/examples/jsm/postprocessing/ShaderPass": "https://esm.sh/three@0.180.0/examples/jsm/postprocessing/ShaderPass?deps=three@0.180.0",
-    "three/examples/jsm/postprocessing/UnrealBloomPass": "https://esm.sh/three@0.180.0/examples/jsm/postprocessing/UnrealBloomPass?deps=three@0.180.0",
-    "three/examples/jsm/shaders/VignetteShader": "https://esm.sh/three@0.180.0/examples/jsm/shaders/VignetteShader?deps=three@0.180.0",
-    "framer-motion": "https://esm.sh/framer-motion@12.23.24?deps=react@19.0.0",
-    "gsap": "https://esm.sh/gsap@3.13.0",
-    "@phosphor-icons/react": "https://esm.sh/@phosphor-icons/react@2.1.0?deps=react@19.0.0",
-    "uuid": "https://esm.sh/uuid@9.0.1",
-    "js-yaml": "https://esm.sh/js-yaml@4.1.0",
-    "jszip": "https://esm.sh/jszip@3.10.1",
-    "webm-writer": "https://esm.sh/webm-writer@0.3.0",
-    "lottie-web": "https://esm.sh/lottie-web@5.12.2",
-    "cannon-es": "https://esm.sh/cannon-es@0.20.0",
-    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
-    "vite": "https://esm.sh/vite@^7.3.1",
-    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2",
+    "react/": "https://esm.sh/react@^19.2.1/",
+    "react": "https://esm.sh/react@^19.2.1",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.1/",
+    "uuid": "https://esm.sh/uuid@^13.0.0",
+    "framer-motion": "https://esm.sh/framer-motion@^12.23.26",
     "three/": "https://esm.sh/three@^0.182.0/",
-    "react/": "https://esm.sh/react@^19.2.3/"
+    "three": "https://esm.sh/three@^0.182.0",
+    "@phosphor-icons/react": "https://esm.sh/@phosphor-icons/react@^2.1.10",
+    "react-dom": "https://esm.sh/react-dom@^19.2.1",
+    "gsap": "https://esm.sh/gsap@^3.14.1",
+    "js-yaml": "https://esm.sh/js-yaml@^4.1.1",
+    "jszip": "https://esm.sh/jszip@^3.10.1",
+    "webm-writer": "https://esm.sh/webm-writer@^1.0.0",
+    "lottie-web": "https://esm.sh/lottie-web@^5.13.0",
+    "cannon-es": "https://esm.sh/cannon-es@^0.20.0"
   }
 }
 </script>
+    -->
 </head>
 <body>
     <div id="root"></div>
-    <script type="module" src="./out_assets_index-BKW6rFlR.js"></script>
+    <script type="module" src="./index.tsx"></script>
 </body>
 </html>
