@@ -13,10 +13,7 @@ export default defineConfig({
         'webm-writer',
         'lottie-web',
         '@phosphor-icons/react'
-      ],
-      output: {
-        format: 'es'
-      }
+      ]
     }
   },
   optimizeDeps: {
