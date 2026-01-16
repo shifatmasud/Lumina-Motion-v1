@@ -6,8 +6,9 @@ export const usePlayback = (objects: SceneObject[]) => {
   const [totalDuration, setTotalDuration] = useState(5); // in seconds
   const [currentTime, setCurrentTime] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
-  const animationFrameRef = useRef<number>();
-  const lastTimeRef = useRef<number>();
+  // Fix: Initializing useRef with undefined as some configurations require an explicit initial value for this hook's overloads.
+  const animationFrameRef = useRef<number>(undefined);
+  const lastTimeRef = useRef<number>(undefined);
 
   useEffect(() => {
     const endTimes = objects.map(o => o.startTime + o.duration);

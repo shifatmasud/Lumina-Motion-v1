@@ -74,7 +74,8 @@ export const ExportModal: React.FC<ExportModalProps> = ({ isOpen, onClose, engin
                 if (cancelExportRef.current) { setStatus('cancelled'); return; }
 
                 const time = i * timeStep;
-                engine.setTime(time, objects, false, true, 'arrival');
+                // Fix: Removed unnecessary 5th argument ('arrival') to match engine.setTime signature
+                engine.setTime(time, objects, false, true);
                 engine.composer.render();
                 
                 writer.addFrame(engine.renderer.domElement);
@@ -91,7 +92,8 @@ export const ExportModal: React.FC<ExportModalProps> = ({ isOpen, onClose, engin
             for (let i = 0; i < totalFrames; i++) {
                 if (cancelExportRef.current) { setStatus('cancelled'); return; }
                 const time = i * timeStep;
-                engine.setTime(time, objects, false, true, 'arrival');
+                // Fix: Removed unnecessary 5th argument ('arrival') to match engine.setTime signature
+                engine.setTime(time, objects, false, true);
                 engine.composer.render();
                 
                 const frameBlob = await canvasToBlob(engine.renderer.domElement, settings.format, settings.format !== 'png' ? settings.quality : undefined);

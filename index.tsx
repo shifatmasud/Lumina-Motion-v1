@@ -131,8 +131,10 @@ const App = () => {
             onAddObject={(type, url, width, height) => scene.handleAddObject(type, currentTime, url, width, height)}
             onExportVideo={() => setShowExportModal(true)} 
             onExportYaml={handleExportYaml} 
-            onFileDrop={scene.handleDrop} 
-            onFileUpload={scene.handleFileUpload} 
+            // Fix: Explicitly pass currentTime to handleDrop
+            onFileDrop={(e) => scene.handleDrop(e, currentTime)} 
+            // Fix: Explicitly pass currentTime to handleFileUpload
+            onFileUpload={(e) => scene.handleFileUpload(e, currentTime)} 
         />
       </Window>
 
@@ -214,7 +216,8 @@ const App = () => {
             totalDuration={totalDuration} 
             onAddKeyframe={() => scene.handleAddKeyframe(currentTime)} 
             selectedKeyframe={selectedKeyframe}
-            onSelectKeyframe={scene.handleSelectKeyframe}
+            // Fix: Pass the current playback controller's setCurrentTime to handleSelectKeyframe
+            onSelectKeyframe={(id, index) => scene.handleSelectKeyframe(id, index, setCurrentTime)}
             onRemoveKeyframe={scene.handleRemoveKeyframe}
             isSnappingEnabled={scene.isSnappingEnabled}
             onCopyAllKeyframesAsYaml={scene.handleCopyAllKeyframesAsYaml}
