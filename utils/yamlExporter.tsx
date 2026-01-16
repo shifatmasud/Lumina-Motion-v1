@@ -1,6 +1,5 @@
 
-
-import yaml from 'https://esm.sh/js-yaml@4.1.0';
+import yaml from 'js-yaml';
 import { GlobalSettings, SceneObject, TimelineKeyframe } from '../engine';
 
 export const createYamlString = (settingsData: GlobalSettings, objectsData: SceneObject[]): string => {

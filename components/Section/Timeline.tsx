@@ -1,9 +1,8 @@
 
-
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, Reorder, AnimatePresence, useDragControls, useMotionValue, useTransform } from 'framer-motion';
-import { v4 as uuidv4 } from 'https://esm.sh/uuid@9.0.1';
+import { v4 as uuidv4 } from 'uuid';
 import gsap from 'gsap';
 import { Play, Pause, Diamond, DotsSixVertical, DotsThreeVertical, Scissors, Copy, Trash, Camera as CameraIcon, ArrowCounterClockwise, SpeakerHigh, Cube, PencilSimple, ClipboardText, MagicWand, Lightbulb, WaveSine, Eye, EyeSlash } from '@phosphor-icons/react';
 import { DesignSystem } from '../../theme';

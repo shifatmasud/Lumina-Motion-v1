@@ -1,8 +1,7 @@
 
-
 import React, { useState, useEffect } from 'react';
-import { v4 as uuidv4 } from 'https://esm.sh/uuid@9.0.1';
-import yaml from 'https://esm.sh/js-yaml@4.1.0';
+import { v4 as uuidv4 } from 'uuid';
+import yaml from 'js-yaml';
 import JSZip from 'jszip';
 import { SceneObject, TimelineKeyframe } from '../engine';
 import { INITIAL_OBJECTS, defaultTransition } from '../constants';
@@ -131,8 +130,6 @@ export const useSceneObjects = (
         }
     };
   
-    // FIX: Removed setCurrentTime parameter to decouple this hook from the playback hook.
-    // The parent component (`index.tsx`) now uses a useEffect to handle this side effect.
     const handleSelectKeyframe = (id: string, index: number) => {
         if (selectedKeyframe?.id === id && selectedKeyframe.index === index) {
             setSelectedKeyframe(null); 
@@ -338,6 +335,35 @@ export const useSceneObjects = (
         } else if (type.startsWith('audio/') || name.endsWith('.wav') || name.endsWith('.mp3') || name.endsWith('.ogg')) handleAddObject('audio', currentTime, url);
         else if (name.endsWith('.glb') || name.endsWith('.gltf')) handleAddObject('glb', currentTime, url);
     };
+
+    const handleLoadYaml = (yamlString: string) => {
+        try {
+            const data = yaml.load(yamlString) as any;
+            if (!data || !data.timeline) return;
+            
+            // Map YAML transform format back to SceneObject format if necessary
+            const newObjects = data.timeline.map((obj: any) => {
+                const o = { ...obj };
+                if (obj.timing) {
+                    o.startTime = obj.timing.start;
+                    o.duration = obj.timing.duration;
+                }
+                if (obj.transform) {
+                    o.position = [obj.transform.position.x, obj.transform.position.y, obj.transform.position.z];
+                    o.rotation = [obj.transform.rotation.x, obj.transform.rotation.y, obj.transform.rotation.z];
+                    o.scale = [obj.transform.scale.x, obj.transform.scale.y, obj.transform.scale.z];
+                }
+                if (obj.appearance) {
+                    o.color = obj.appearance.color;
+                    o.opacity = obj.appearance.opacity;
+                }
+                return o;
+            });
+            setObjects(newObjects);
+        } catch (e) {
+            console.error("Failed to load YAML", e);
+        }
+    };
     
     const handleDrop = (e: React.DragEvent, currentTime: number) => { e.preventDefault(); if (e.dataTransfer.files[0]) processFile(e.dataTransfer.files[0], currentTime); };
     const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, currentTime: number) => { if (e.target.files?.[0]) processFile(e.target.files[0], currentTime); };
@@ -349,6 +375,6 @@ export const useSceneObjects = (
         handleRemoveAllKeyframes, handleSelectKeyframe, handleCopySelectedKeyframeValuesAsYaml,
         handlePasteValuesToSelectedKeyframeFromYaml, handleCopyAllKeyframesAsYaml, handlePasteAllKeyframesFromYaml,
         handleBakePhysics, getControlValue, handleControlChange, handleKeyframePropertyChange,
-        handleDrop, handleFileUpload
+        handleDrop, handleFileUpload, handleLoadYaml
     };
 };

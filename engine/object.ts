@@ -1,8 +1,7 @@
 
-
 import * as THREE from 'three';
 import { SVGLoader } from 'three/examples/jsm/loaders/SVGLoader.js';
-import lottie from 'https://esm.sh/lottie-web@^5.13.0';
+import lottie from 'lottie-web';
 import { SceneObject } from './types';
 import type { Engine } from '../core';
 import { chromaKeyVertexShader, chromaKeyFragmentShader } from './shaders';

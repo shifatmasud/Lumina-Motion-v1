@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
 import { DesignSystem } from './theme';
@@ -11,6 +10,7 @@ import { AssetsPanel } from './components/Section/AssetsPanel';
 import { PropertiesPanel } from './components/Section/PropertiesPanel';
 import { ProjectSettingsPanel } from './components/Section/ProjectSettingsPanel';
 import { PhysicsPanel } from './components/Section/PhysicsPanel';
+import { AIPanel } from './components/Section/AIPanel';
 import { ExportModal } from './components/Package/ExportModal';
 import { createYamlString } from './utils/yamlExporter';
 import { SimulationSettings } from './utils/physics';
@@ -20,6 +20,7 @@ import { usePlayback } from './hooks/usePlayback';
 import { useSceneObjects } from './hooks/useSceneObjects';
 import { useEngine } from './hooks/useEngine';
 import { GoogleGenAI } from "@google/genai";
+import { MagicWand } from '@phosphor-icons/react';
 
 import './index.css';
 
@@ -27,6 +28,7 @@ const App = () => {
   // --- State ---
   const [accentColor, setAccentColor] = useState(DEFAULT_ACCENT_COLOR);
   const [globalSettings, setGlobalSettings] = useState<GlobalSettings>(JSON.parse(JSON.stringify(INITIAL_GLOBAL_SETTINGS)));
+  const [showAIPanel, setShowAIPanel] = useState(false);
   
   // --- Custom Hooks for Logic Separation ---
   const { 
@@ -144,7 +146,6 @@ const App = () => {
             onAddObject={(type, url, width, height) => scene.handleAddObject(type, currentTime, url, width, height)}
             onExportVideo={() => setShowExportModal(true)} 
             onExportYaml={handleExportYaml} 
-            // FIX: Pass `currentTime` to file drop/upload handlers.
             onFileDrop={(e) => scene.handleDrop(e, currentTime)} 
             onFileUpload={(e) => scene.handleFileUpload(e, currentTime)} 
         />
@@ -176,6 +177,17 @@ const App = () => {
         height={520}
       >
           <PhysicsPanel onBake={(settings: SimulationSettings) => handleBakePhysics(settings, currentTime)} />
+      </Window>
+
+      <Window
+        id="ai-panel"
+        title="LUMINA AI"
+        isOpen={showAIPanel}
+        onClose={() => setShowAIPanel(false)}
+        width={340}
+        height={460}
+      >
+          <AIPanel onApplyYaml={scene.handleLoadYaml} />
       </Window>
 
       <Window 
@@ -228,7 +240,6 @@ const App = () => {
             totalDuration={totalDuration} 
             onAddKeyframe={() => scene.handleAddKeyframe(currentTime)} 
             selectedKeyframe={selectedKeyframe}
-            // FIX: The signature of handleSelectKeyframe was corrected in the hook, so this prop assignment is now valid.
             onSelectKeyframe={scene.handleSelectKeyframe}
             onRemoveKeyframe={scene.handleRemoveKeyframe}
             isSnappingEnabled={scene.isSnappingEnabled}
@@ -247,7 +258,25 @@ const App = () => {
         setShowTimeline={setShowTimeline}
         showProperties={showProperties}
         setShowProperties={setShowProperties}
-      />
+      >
+          {/* Custom AI Dock Item */}
+          <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}>
+            <button 
+                onClick={() => setShowAIPanel(!showAIPanel)} 
+                style={{ 
+                    width: '44px', height: '44px', borderRadius: '14px', 
+                    border: showAIPanel ? `1px solid ${DesignSystem.Color.Accent.Surface[1]}` : `1px solid transparent`, 
+                    background: 'rgba(255,255,255,0.03)', color: showAIPanel ? DesignSystem.Color.Accent.Content[1] : DesignSystem.Color.Base.Content[2], 
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px', cursor: 'pointer',
+                    boxShadow: showAIPanel ? `0 0 24px ${DesignSystem.Color.Accent.Surface[1]}` : 'none',
+                    transition: 'all 0.2s'
+                }}
+            >
+                <MagicWand weight="fill" />
+            </button>
+            {showAIPanel && ( <div style={{ position: 'absolute', bottom: '-8px', width: '3px', height: '3px', borderRadius: '50%', background: DesignSystem.Color.Accent.Surface[1] }} /> )}
+          </div>
+      </Dock>
     </div>
   );
 };

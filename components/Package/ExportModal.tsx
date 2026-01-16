@@ -2,8 +2,8 @@
 import React, { useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import JSZip from 'https://esm.sh/jszip@3.10.1';
-import WebMWriter from 'https://esm.sh/webm-writer@^1.0.0';
+import JSZip from 'jszip';
+import WebMWriter from 'webm-writer';
 import { X, FileArchive, CheckCircle, FileVideo, CircleNotch } from '@phosphor-icons/react';
 
 import { DesignSystem } from '../../theme';
@@ -266,4 +266,3 @@ export const ExportModal: React.FC<ExportModalProps> = ({ isOpen, onClose, engin
         document.body
     );
 };
-    
