@@ -1,3 +1,3 @@
 
-export { Engine } from './core';
+export { Engine } from './engine/core';
 export * from './engine/types';

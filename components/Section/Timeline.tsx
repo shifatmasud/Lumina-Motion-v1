@@ -1,4 +1,5 @@
 
+
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, Reorder, AnimatePresence, useDragControls, useMotionValue, useTransform } from 'framer-motion';
@@ -622,8 +623,7 @@ export const TimelineSequencer: React.FC<TimelineProps> = ({
     setIsScrubbing(true);
     if (isPlaying) onTogglePlay();
 
-    // FIX: Use a compatible event type for both React synthetic events and native events.
-    const handleInteraction = (event: { clientX: number }) => {
+    const handleInteraction = (event: PointerEvent) => {
         const scrollContainerRect = scrollContainer.getBoundingClientRect();
         const clickInContainer = event.clientX - scrollContainerRect.left;
         const contentX = scrollContainer.scrollLeft + clickInContainer;
@@ -637,7 +637,7 @@ export const TimelineSequencer: React.FC<TimelineProps> = ({
         setCurrentTime(clampedTime);
     };
     
-    handleInteraction(e);
+    handleInteraction(e as PointerEvent);
 
     const onPointerMove = (moveEvent: PointerEvent) => {
         if (isDraggingPlayhead.current) {

@@ -1,4 +1,6 @@
 
+import { SceneObject } from ".";
+
 export interface TimelineKeyframe {
   time: number; // in seconds, relative to the clip's start
   name?: string; // Optional user-defined name

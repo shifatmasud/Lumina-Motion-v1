@@ -1,4 +1,5 @@
 
+
 {
   "imports": {
     "react": "https://esm.sh/react@18.2.0",
@@ -9,18 +10,17 @@
     "three/examples/jsm/loaders/SVGLoader": "https://esm.sh/three@0.180.0/examples/jsm/loaders/SVGLoader?deps=three@0.180.0",
     "three/examples/jsm/postprocessing/EffectComposer": "https://esm.sh/three@0.180.0/examples/jsm/postprocessing/EffectComposer?deps=three@0.180.0",
     "three/examples/jsm/postprocessing/RenderPass": "https://esm.sh/three@0.180.0/examples/jsm/postprocessing/RenderPass?deps=three@0.180.0",
-    "three/examples/jsm/postprocessing/ShaderPass": "https://esm.sh/three@0.180.0/examples/jsm/postprocessing/ShaderPass?deps=three@0.180.0", 
-    "three/examples/jsm/postprocessing/UnrealBloomPass": "https://esm.sh/three@0.180.0/examples/jsm/postprocessing/UnrealBloomPass?deps=three@0.180.0", 
+    "three/examples/jsm/postprocessing/ShaderPass": "https://esm.sh/three@0.180.0/examples/jsm/postprocessing/ShaderPass?deps=three@0.180.0",
+    "three/examples/jsm/postprocessing/UnrealBloomPass": "https://esm.sh/three@0.180.0/examples/jsm/postprocessing/UnrealBloomPass?deps=three@0.180.0",
     "three/examples/jsm/shaders/VignetteShader": "https://esm.sh/three@0.180.0/examples/jsm/shaders/VignetteShader?deps=three@0.180.0",
     "framer-motion": "https://esm.sh/framer-motion@12.23.24?deps=react@18.2.0",
     "gsap": "https://esm.sh/gsap@3.13.0",
     "@phosphor-icons/react": "https://esm.sh/@phosphor-icons/react@2.1.0?deps=react@18.2.0",
-    "cannon-es": "https://esm.sh/cannon-es@0.20.0",
-    "@google/genai": "https://esm.sh/@google/genai@1.37.0",
+    "uuid": "https://esm.sh/uuid@9.0.1",
     "js-yaml": "https://esm.sh/js-yaml@4.1.0",
     "jszip": "https://esm.sh/jszip@3.10.1",
-    "uuid": "https://esm.sh/uuid@9.0.1",
-    "lottie-web": "https://esm.sh/lottie-web@5.13.2",
-    "webm-writer": "https://esm.sh/webm-writer@1.0.0"
+    "webm-writer": "https://esm.sh/webm-writer@0.3.0",
+    "lottie-web": "https://esm.sh/lottie-web@5.12.2",
+    "cannon-es": "https://esm.sh/cannon-es@0.20.0"
   }
 }

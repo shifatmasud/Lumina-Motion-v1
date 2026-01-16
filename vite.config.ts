@@ -1,35 +1,23 @@
+import path from 'path';
+import { defineConfig, loadEnv } from 'vite';
+import react from '@vitejs/plugin-react';
 
-import { defineConfig } from 'vite';
-
-export default defineConfig({
-  build: {
-    chunkSizeWarningLimit: 2000,
-    rollupOptions: {
-      // Mark these as external so Rollup doesn't try to bundle them.
-      // This is crucial for environments using browser-native import maps.
-      external: [
-        'react',
-        'react-dom/client',
-        'three',
-        'three/examples/jsm/controls/OrbitControls',
-        'three/examples/jsm/loaders/GLTFLoader',
-        'three/examples/jsm/loaders/SVGLoader',
-        'three/examples/jsm/postprocessing/EffectComposer',
-        'three/examples/jsm/postprocessing/RenderPass',
-        'three/examples/jsm/postprocessing/ShaderPass',
-        'three/examples/jsm/postprocessing/UnrealBloomPass',
-        'three/examples/jsm/shaders/VignetteShader',
-        'framer-motion',
-        'gsap',
-        '@phosphor-icons/react',
-        'cannon-es',
-        '@google/genai',
-        'js-yaml',
-        'jszip',
-        'uuid',
-        'lottie-web',
-        'webm-writer'
-      ],
-    },
-  },
+export default defineConfig(({ mode }) => {
+    const env = loadEnv(mode, '.', '');
+    return {
+      server: {
+        port: 3000,
+        host: '0.0.0.0',
+      },
+      plugins: [react()],
+      define: {
+        'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
+        'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY)
+      },
+      resolve: {
+        alias: {
+          '@': path.resolve(__dirname, '.'),
+        }
+      }
+    };
 });

@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { motion } from 'framer-motion';
 import { SquaresFour, FilmStrip, Faders } from '@phosphor-icons/react';
@@ -21,10 +20,9 @@ interface DockProps {
     setShowTimeline: (show: boolean) => void;
     showProperties: boolean;
     setShowProperties: (show: boolean) => void;
-    children?: React.ReactNode;
 }
 
-export const Dock: React.FC<DockProps> = ({ containerRef, showAssets, setShowAssets, showTimeline, setShowTimeline, showProperties, setShowProperties, children }) => (
+export const Dock: React.FC<DockProps> = ({ containerRef, showAssets, setShowAssets, showTimeline, setShowTimeline, showProperties, setShowProperties }) => (
     <motion.div drag dragMomentum={false} dragConstraints={containerRef} initial={{ y: 0, x: '-50%' }} style={{ position: 'absolute', bottom: '40px', left: '50%', height: '72px', background: DesignSystem.Color.Base.Surface['3b'], backdropFilter: 'blur(40px)', WebkitBackdropFilter: 'blur(40px)', borderRadius: '999px', border: `1px solid ${DesignSystem.Color.Base.Border[2]}`, padding: '0 24px', display: 'flex', alignItems: 'center', gap: '24px', boxShadow: '0 24px 48px -12px rgba(0,0,0,0.6)', zIndex: 200, touchAction: 'none' }} whileTap={{ cursor: 'grabbing' }}>
         <div style={{ position: 'absolute', top: '-10px', left: '0', right: '0', height: '20px', display: 'flex', justifyContent: 'center' }}>
             <div style={{ width: '40px', height: '4px', background: 'rgba(255,255,255,0.1)', borderRadius: '4px' }} />
@@ -32,6 +30,5 @@ export const Dock: React.FC<DockProps> = ({ containerRef, showAssets, setShowAss
         <DockItem icon={<SquaresFour weight="fill" />} label="ASSETS" isActive={showAssets} onClick={() => setShowAssets(!showAssets)} />
         <DockItem icon={<FilmStrip weight="fill" />} label="TIMELINE" isActive={showTimeline} onClick={() => setShowTimeline(!showTimeline)} />
         <DockItem icon={<Faders weight="fill" />} label="PROPS" isActive={showProperties} onClick={() => setShowProperties(!showProperties)} />
-        {children}
     </motion.div>
 );
