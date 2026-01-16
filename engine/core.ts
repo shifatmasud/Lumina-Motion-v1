@@ -65,7 +65,7 @@ export class Engine {
     this.audioListener = new THREE.AudioListener();
     this.camera.add(this.audioListener);
 
-    // Renderer
+    // Renderer - Anti-aliasing explicitly disabled
     this.renderer = new THREE.WebGLRenderer({ antialias: false, alpha: false });
     this.renderer.setSize(container.clientWidth, container.clientHeight);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));

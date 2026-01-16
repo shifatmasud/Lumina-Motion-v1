@@ -15,5 +15,15 @@ export default defineConfig({
         '@phosphor-icons/react'
       ]
     }
+  },
+  optimizeDeps: {
+    exclude: [
+      'uuid',
+      'js-yaml',
+      'jszip',
+      'webm-writer',
+      'lottie-web',
+      '@phosphor-icons/react'
+    ]
   }
 });
