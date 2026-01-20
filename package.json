@@ -20,7 +20,7 @@
     "react-dom": "^18.2.0",
     "three": "^0.165.0",
     "uuid": "^9.0.1",
-    "webm-writer": "^2.0.1"
+    "webm-writer": "^1.0.0"
   },
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",
