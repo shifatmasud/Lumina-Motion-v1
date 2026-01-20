@@ -305,12 +305,12 @@ export function createMesh(engine: Engine, objData: SceneObject): THREE.Object3D
         if (objData.lightType === 'directional') {
             const dirLight = new THREE.DirectionalLight(objData.color, objData.intensity);
             dirLight.castShadow = true;
-            dirLight.shadow.mapSize.width = 2048; 
-            dirLight.shadow.mapSize.height = 2048;
-            dirLight.shadow.camera.top = 10;
-            dirLight.shadow.camera.bottom = -10;
-            dirLight.shadow.camera.left = -10;
-            dirLight.shadow.camera.right = 10;
+            dirLight.shadow.mapSize.width = 1024; 
+            dirLight.shadow.mapSize.height = 1024;
+            dirLight.shadow.camera.top = 15;
+            dirLight.shadow.camera.bottom = -15;
+            dirLight.shadow.camera.left = -15;
+            dirLight.shadow.camera.right = 15;
             dirLight.shadow.camera.near = 0.5;
             dirLight.shadow.camera.far = 50;
             dirLight.shadow.bias = -0.0005; 
@@ -328,6 +328,15 @@ export function createMesh(engine: Engine, objData: SceneObject): THREE.Object3D
         }
         
         lightGroup.add(light);
+        
+        // The target is essential for direction calculation. It must be in the scene.
+        // We add it to the main scene and store a reference for cleanup.
+        if (light instanceof THREE.DirectionalLight || light instanceof THREE.SpotLight) {
+            light.target.position.set(0, 0, 0); // Default target is world origin
+            engine.scene.add(light.target);
+            lightGroup.userData.target = light.target;
+        }
+
         if (helper) {
             helper.visible = false;
             lightGroup.userData.helper = helper;

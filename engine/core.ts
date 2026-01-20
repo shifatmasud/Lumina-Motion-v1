@@ -237,6 +237,9 @@ export class Engine {
             if (obj.userData.helper) {
                 this.scene.remove(obj.userData.helper);
             }
+            if (obj.userData.target) {
+                this.scene.remove(obj.userData.target);
+            }
             obj.traverse((child: any) => {
                 if (child.isMesh) {
                     child.geometry.dispose();

@@ -1,3 +1,4 @@
+
 import { DesignSystem } from './theme';
 import { SceneObject, GlobalSettings, TransitionEffect } from './engine';
 
@@ -125,7 +126,7 @@ export const INITIAL_GLOBAL_SETTINGS: GlobalSettings = {
     rimLight: { enabled: true, color: DEFAULT_ACCENT_COLOR, intensity: 5.0, position: [0, 0, 1] }, // Kept for type safety, but will be unused
     performance: {
         pixelRatio: Math.min(window.devicePixelRatio, 1.5),
-        shadowMapSize: 2048,
+        shadowMapSize: 1024,
     },
     aspectRatio: 'free',
 };
