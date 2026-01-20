@@ -348,7 +348,7 @@ export const Window: React.FC<WindowProps> = ({
           <div style={{
              height: '40px',
              borderTop: `1px solid ${DesignSystem.Color.Base.Border[1]}`,
-             background: 'rgba(0,0,0,0.2)',
+             background: DesignSystem.Color.Base.Surface[2],
              display: 'flex',
              alignItems: 'center',
              justifyContent: 'flex-start',
