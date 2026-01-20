@@ -636,8 +636,8 @@ export const TimelineSequencer: React.FC<TimelineProps> = ({
         setCurrentTime(clampedTime);
     };
     
-    // Fix: Use nativeEvent from the React PointerEvent to correctly match the handler's signature
-    handleInteraction(e.nativeEvent);
+    // Fix: The event from onPointerDown is a React.PointerEvent, which has `nativeEvent`. The subsequent `pointermove` events are native `PointerEvent`s. Using `e` directly would cause a type mismatch.
+    handleInteraction(e.nativeEvent as PointerEvent);
 
     const onPointerMove = (moveEvent: PointerEvent) => {
         if (isDraggingPlayhead.current) {
