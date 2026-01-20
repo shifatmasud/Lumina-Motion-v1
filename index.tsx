@@ -18,14 +18,44 @@ import { useUIState } from './hooks/useUIState';
 import { usePlayback } from './hooks/usePlayback';
 import { useSceneObjects } from './hooks/useSceneObjects';
 import { useEngine } from './hooks/useEngine';
+import { useHistory } from './hooks/useHistory';
 import { adjustColor } from './utils/color';
 
 import './index.css';
 
+interface SceneState {
+  objects: SceneObject[];
+  globalSettings: GlobalSettings;
+  accentColor: string;
+}
+
 const App = () => {
   // --- State ---
-  const [accentColor, setAccentColor] = useState(DEFAULT_ACCENT_COLOR);
-  const [globalSettings, setGlobalSettings] = useState<GlobalSettings>(JSON.parse(JSON.stringify(INITIAL_GLOBAL_SETTINGS)));
+  const { 
+    state: sceneState, 
+    setState: setSceneState, 
+    undo, 
+    redo, 
+    resetHistory,
+    canUndo, 
+    canRedo 
+  } = useHistory<SceneState>({
+    objects: JSON.parse(JSON.stringify(INITIAL_OBJECTS)),
+    globalSettings: JSON.parse(JSON.stringify(INITIAL_GLOBAL_SETTINGS)),
+    accentColor: DEFAULT_ACCENT_COLOR,
+  });
+  const { objects, globalSettings, accentColor } = sceneState;
+
+  // --- Wrapper Setters for Prop Drilling ---
+  const setObjects = (updater: React.SetStateAction<SceneObject[]>, isDebounced: boolean = false) => {
+    setSceneState(prev => ({ ...prev, objects: typeof updater === 'function' ? updater(prev.objects) : updater }), isDebounced);
+  };
+  const setGlobalSettings = (updater: React.SetStateAction<GlobalSettings>, isDebounced: boolean = false) => {
+    setSceneState(prev => ({ ...prev, globalSettings: typeof updater === 'function' ? updater(prev.globalSettings) : updater }), isDebounced);
+  };
+  const setAccentColor = (updater: React.SetStateAction<string>, isDebounced: boolean = false) => {
+    setSceneState(prev => ({ ...prev, accentColor: typeof updater === 'function' ? updater(prev.accentColor) : updater }), isDebounced);
+  };
   
   // --- Custom Hooks for Logic Separation ---
   const { 
@@ -33,8 +63,8 @@ const App = () => {
     showProjectSettings, setShowProjectSettings, showPhysicsPanel, setShowPhysicsPanel, showExportModal, setShowExportModal
   } = useUIState();
 
-  const scene = useSceneObjects(accentColor, setShowProperties);
-  const { objects, setObjects, selectedObject, selectedKeyframe, handleBakePhysics, handleUpdateObject } = scene;
+  const scene = useSceneObjects(objects, setObjects, accentColor, setShowProperties);
+  const { selectedObject, selectedKeyframe, handleBakePhysics, handleUpdateObject } = scene;
   
   const playback = usePlayback(objects);
   const { currentTime, setCurrentTime, totalDuration, isPlaying, setIsPlaying } = playback;
@@ -53,12 +83,18 @@ const App = () => {
   useEffect(() => {
     document.documentElement.style.setProperty('--accent-surface', accentColor);
     document.documentElement.style.setProperty('--accent-surface-dim', adjustColor(accentColor, -40));
-    document.documentElement.style.setProperty('--accent-glow', `${accentColor}66`); // 40% opacity
-    setGlobalSettings(prev => ({ ...prev, accentColor }));
-    setObjects(prev => prev.map(o => 
-      o.id === 'rim-light' ? { ...o, color: accentColor } : o
-    ));
-  }, [accentColor, setObjects]);
+    document.documentElement.style.setProperty('--accent-glow', `${accentColor}66`);
+    
+    setSceneState(prev => {
+        if (prev.globalSettings.accentColor === accentColor && prev.objects.find(o=>o.id === 'rim-light')?.color === accentColor) {
+            return prev;
+        }
+        const newObjects = prev.objects.map(o => 
+            o.id === 'rim-light' ? { ...o, color: accentColor } : o
+        );
+        return { ...prev, globalSettings: { ...prev.globalSettings, accentColor }, objects: newObjects };
+    }, true);
+  }, [accentColor, setSceneState]);
 
   // --- Actions ---
 
@@ -68,9 +104,11 @@ const App = () => {
   };
   
   const handleResetScene = () => {
-      setAccentColor(DEFAULT_ACCENT_COLOR);
-      setObjects(JSON.parse(JSON.stringify(INITIAL_OBJECTS)));
-      setGlobalSettings(JSON.parse(JSON.stringify(INITIAL_GLOBAL_SETTINGS)));
+      resetHistory({
+        objects: JSON.parse(JSON.stringify(INITIAL_OBJECTS)),
+        globalSettings: JSON.parse(JSON.stringify(INITIAL_GLOBAL_SETTINGS)),
+        accentColor: DEFAULT_ACCENT_COLOR,
+      });
       scene.setSelectedId(null);
       setCurrentTime(0);
       setIsPlaying(false);
@@ -128,9 +166,7 @@ const App = () => {
             onAddObject={(type, url, width, height) => scene.handleAddObject(type, currentTime, url, width, height)}
             onExportVideo={() => setShowExportModal(true)} 
             onExportYaml={handleExportYaml} 
-            // Fix: Explicitly pass currentTime to handleDrop
             onFileDrop={(e) => scene.handleDrop(e, currentTime)} 
-            // Fix: Explicitly pass currentTime to handleFileUpload
             onFileUpload={(e) => scene.handleFileUpload(e, currentTime)} 
         />
       </Window>
@@ -176,6 +212,8 @@ const App = () => {
         onPasteKeyframeFromYaml={scene.handlePasteValuesToSelectedKeyframeFromYaml}
         onOpenProjectSettings={() => setShowProjectSettings(true)}
         onOpenPhysicsPanel={() => setShowPhysicsPanel(prev => !prev)}
+        onUndo={canUndo ? undo : undefined}
+        onRedo={canRedo ? redo : undefined}
       >
         <PropertiesPanel
             selectedObject={selectedObject}
@@ -200,6 +238,8 @@ const App = () => {
         height={450}
         isSnappingEnabled={scene.isSnappingEnabled}
         onToggleSnapping={() => scene.setIsSnappingEnabled(!scene.isSnappingEnabled)}
+        onUndo={canUndo ? undo : undefined}
+        onRedo={canRedo ? redo : undefined}
       >
           <TimelineSequencer 
             objects={objects} 
@@ -213,7 +253,6 @@ const App = () => {
             totalDuration={totalDuration} 
             onAddKeyframe={() => scene.handleAddKeyframe(currentTime)} 
             selectedKeyframe={selectedKeyframe}
-            // Fix: Pass the current playback controller's setCurrentTime to handleSelectKeyframe
             onSelectKeyframe={(id, index) => scene.handleSelectKeyframe(id, index, setCurrentTime)}
             onRemoveKeyframe={scene.handleRemoveKeyframe}
             isSnappingEnabled={scene.isSnappingEnabled}

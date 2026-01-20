@@ -4,16 +4,19 @@ import { v4 as uuidv4 } from 'uuid';
 import yaml from 'js-yaml';
 import JSZip from 'jszip';
 import { SceneObject, TimelineKeyframe } from '../engine';
-import { INITIAL_OBJECTS, defaultTransition } from '../constants';
+import { defaultTransition } from '../constants';
 import { getFullKeyframeValuesAtTime, getInterpolatedValueAtTime } from '../utils/animation';
 import { bakeScenePhysics, SimulationSettings } from '../utils/physics';
 
+type SetObjectsFn = (updater: React.SetStateAction<SceneObject[]>, isDebounced?: boolean) => void;
+
 // This hook encapsulates all state and logic related to scene objects and their properties.
 export const useSceneObjects = (
+    objects: SceneObject[],
+    setObjects: SetObjectsFn,
     accentColor: string,
     setShowProperties: (show: boolean) => void,
 ) => {
-    const [objects, setObjects] = useState<SceneObject[]>(JSON.parse(JSON.stringify(INITIAL_OBJECTS)));
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [selectedKeyframe, setSelectedKeyframe] = useState<{ id: string, index: number } | null>(null);
     const [copiedKeyframeYaml, setCopiedKeyframeYaml] = useState<string | null>(null);
@@ -40,7 +43,7 @@ export const useSceneObjects = (
                 : o
             ));
         }
-    }, [objects]);
+    }, [objects, setObjects]);
     
     // Handlers
     const handleAddObject = (type: SceneObject['type'], currentTime: number, url?: string, width?: number, height?: number) => {
@@ -252,46 +255,48 @@ export const useSceneObjects = (
 
     const handleControlChange = (property: string, value: any, axis?: number) => {
         if (!selectedId) return;
-        let finalValue = value;
-        if (property === 'scale' && isScaleLocked && axis !== undefined && selectedObject) {
-            const baseScale = (selectedKeyframe && selectedKeyframe.id === selectedId) ? (selectedObject.animations[selectedKeyframe.index]?.values?.scale || selectedObject.scale) : selectedObject.scale;
-            const oldValueForAxis = baseScale[axis];
-            const ratio = (oldValueForAxis !== 0 && oldValueForAxis !== undefined) ? value / oldValueForAxis : 1;
-            const newScale: [number, number, number] = [ baseScale[0] * ratio, baseScale[1] * ratio, baseScale[2] * ratio ];
-            newScale[axis] = value;
-            finalValue = newScale;
-            axis = undefined;
-        }
 
-        if (selectedKeyframe && selectedKeyframe.id === selectedId) {
-            setObjects(prev => prev.map(o => {
+        const updater = (prev: SceneObject[]) => {
+            return prev.map(o => {
                 if (o.id !== selectedId) return o;
-                const newAnims = [...o.animations];
-                const kfToUpdate = newAnims[selectedKeyframe.index];
-                if (!kfToUpdate) return o;
-                let updatedValue = finalValue;
-                if (axis !== undefined) {
-                    const currentValue = (kfToUpdate.values[property as keyof typeof kfToUpdate.values] as [number, number, number]) || (o[property as keyof SceneObject] as [number, number, number]) || (property.includes('scale') ? [1, 1, 1] : [0, 0, 0]);
-                    const newTuple = [...currentValue] as [number, number, number];
-                    newTuple[axis] = finalValue;
-                    updatedValue = newTuple;
+                
+                let finalValue = value;
+                if (property === 'scale' && isScaleLocked && axis !== undefined) {
+                    const baseScale = (selectedKeyframe && selectedKeyframe.id === selectedId) ? (o.animations[selectedKeyframe.index]?.values?.scale || o.scale) : o.scale;
+                    const oldValueForAxis = baseScale[axis];
+                    const ratio = (oldValueForAxis !== 0 && oldValueForAxis !== undefined) ? value / oldValueForAxis : 1;
+                    const newScale: [number, number, number] = [ baseScale[0] * ratio, baseScale[1] * ratio, baseScale[2] * ratio ];
+                    newScale[axis] = value;
+                    finalValue = newScale;
+                    axis = undefined;
                 }
-                newAnims[selectedKeyframe.index] = { ...kfToUpdate, values: { ...kfToUpdate.values, [property]: updatedValue } };
-                return { ...o, animations: newAnims };
-            }));
-        } else {
-            setObjects(prev => prev.map(o => {
-                if (o.id !== selectedId) return o;
-                let updatedValue = finalValue;
-                if (axis !== undefined) {
-                    const currentValue = (o[property as keyof SceneObject] as [number, number, number]) || (property.includes('scale') ? [1, 1, 1] : [0, 0, 0]);
-                    const newTuple = [...currentValue] as [number, number, number];
-                    newTuple[axis] = finalValue;
-                    updatedValue = newTuple;
+
+                if (selectedKeyframe && selectedKeyframe.id === selectedId) {
+                    const newAnims = [...o.animations];
+                    const kfToUpdate = newAnims[selectedKeyframe.index];
+                    if (!kfToUpdate) return o;
+                    let updatedValue = finalValue;
+                    if (axis !== undefined) {
+                        const currentValue = (kfToUpdate.values[property as keyof typeof kfToUpdate.values] as [number, number, number]) || (o[property as keyof SceneObject] as [number, number, number]) || (property.includes('scale') ? [1, 1, 1] : [0, 0, 0]);
+                        const newTuple = [...currentValue] as [number, number, number];
+                        newTuple[axis] = finalValue;
+                        updatedValue = newTuple;
+                    }
+                    newAnims[selectedKeyframe.index] = { ...kfToUpdate, values: { ...kfToUpdate.values, [property]: updatedValue } };
+                    return { ...o, animations: newAnims };
+                } else {
+                    let updatedValue = finalValue;
+                    if (axis !== undefined) {
+                        const currentValue = (o[property as keyof SceneObject] as [number, number, number]) || (property.includes('scale') ? [1, 1, 1] : [0, 0, 0]);
+                        const newTuple = [...currentValue] as [number, number, number];
+                        newTuple[axis] = finalValue;
+                        updatedValue = newTuple;
+                    }
+                    return { ...o, [property]: updatedValue };
                 }
-                return { ...o, [property]: updatedValue };
-            }));
-        }
+            });
+        };
+        setObjects(updater, true);
     };
   
     const handleKeyframePropertyChange = (property: keyof TimelineKeyframe, value: any) => {
@@ -346,8 +351,14 @@ export const useSceneObjects = (
     const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, currentTime: number) => { if (e.target.files?.[0]) processFile(e.target.files[0], currentTime); };
 
     return {
-        objects, setObjects, selectedId, setSelectedId, selectedObject, selectedKeyframe, setSelectedKeyframe,
+        // State and setters that are still local to this hook
+        selectedId, setSelectedId, selectedKeyframe, setSelectedKeyframe,
         copiedKeyframeYaml, isScaleLocked, setIsScaleLocked, isSnappingEnabled, setIsSnappingEnabled,
+        
+        // Derived state
+        selectedObject,
+
+        // Handlers
         handleAddObject, handleUpdateObject, handleRemoveObject, handleAddKeyframe, handleRemoveKeyframe,
         handleRemoveAllKeyframes, handleSelectKeyframe, handleCopySelectedKeyframeValuesAsYaml,
         handlePasteValuesToSelectedKeyframeFromYaml, handleCopyAllKeyframesAsYaml, handlePasteAllKeyframesFromYaml,
