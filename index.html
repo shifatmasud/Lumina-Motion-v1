@@ -6,33 +6,30 @@
     <title>Lumina</title>
     <link rel="stylesheet" href="./index.css">
     
-    <!-- Load stable import map first -->
+    <!-- Load stable import map -->
     <script src="./importmap.js" type="importmap"></script>
     
-    <!-- Comment out conflicting inline import map (React 19) -->
-    <!-- 
-    <script type="importmap">
+<script type="importmap">
 {
   "imports": {
-    "react/": "https://esm.sh/react@^19.2.1/",
-    "react": "https://esm.sh/react@^19.2.1",
-    "react-dom/": "https://esm.sh/react-dom@^19.2.1/",
     "uuid": "https://esm.sh/uuid@^13.0.0",
-    "framer-motion": "https://esm.sh/framer-motion@^12.23.26",
+    "react/": "https://esm.sh/react@^19.2.3/",
+    "react": "https://esm.sh/react@^19.2.3",
+    "react-dom": "https://esm.sh/react-dom@^19.2.3",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "framer-motion": "https://esm.sh/framer-motion@^12.27.1",
     "three/": "https://esm.sh/three@^0.182.0/",
     "three": "https://esm.sh/three@^0.182.0",
-    "@phosphor-icons/react": "https://esm.sh/@phosphor-icons/react@^2.1.10",
-    "react-dom": "https://esm.sh/react-dom@^19.2.1",
-    "gsap": "https://esm.sh/gsap@^3.14.1",
-    "js-yaml": "https://esm.sh/js-yaml@^4.1.1",
+    "gsap": "https://esm.sh/gsap@^3.14.2",
     "jszip": "https://esm.sh/jszip@^3.10.1",
-    "webm-writer": "https://esm.sh/webm-writer@^1.0.0",
+    "js-yaml": "https://esm.sh/js-yaml@^4.1.1",
+    "cannon-es": "https://esm.sh/cannon-es@^0.20.0",
     "lottie-web": "https://esm.sh/lottie-web@^5.13.0",
-    "cannon-es": "https://esm.sh/cannon-es@^0.20.0"
+    "@phosphor-icons/react": "https://esm.sh/@phosphor-icons/react@^2.1.10",
+    "webm-writer": "https://esm.sh/webm-writer@^1.0.0"
   }
 }
 </script>
-    -->
 </head>
 <body>
     <div id="root"></div>

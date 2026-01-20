@@ -11,7 +11,7 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   active?: boolean;
 }
 
-interface SliderProps {
+export interface SliderProps {
   label?: string;
   value: number;
   min?: number;
@@ -225,8 +225,13 @@ export const Divider = () => (
     <div style={{ width: '100%', height: '1px', background: DesignSystem.Color.Base.Border[1], margin: `${DesignSystem.Space(2)} 0` }} />
 );
 
-export const PropSlider = ({ label, value, onChange, isMode, ...props }: any) => {
-    const resetValue = label.toLowerCase().includes('scale') ? 1 : 0;
+interface PropSliderSpecificProps {
+  isMode?: boolean;
+}
+type PropSliderProps = SliderProps & PropSliderSpecificProps;
+
+export const PropSlider: React.FC<PropSliderProps> = ({ label, value, onChange, isMode, ...props }) => {
+    const resetValue = label?.toLowerCase().includes('scale') ? 1 : 0;
     return (
         <div style={{ position: 'relative', padding: isMode ? '4px' : '0', border: isMode ? `1px dashed ${DesignSystem.Color.Feedback.Warning}` : 'none', borderRadius: '8px', margin: isMode ? '-4px' : '0' }}>
              <Slider 

@@ -18,6 +18,7 @@ import { useUIState } from './hooks/useUIState';
 import { usePlayback } from './hooks/usePlayback';
 import { useSceneObjects } from './hooks/useSceneObjects';
 import { useEngine } from './hooks/useEngine';
+import { adjustColor } from './utils/color';
 
 import './index.css';
 
@@ -47,10 +48,6 @@ const App = () => {
   );
   
   // --- Effects ---
-  
-  const adjustColor = (color: string, amount: number) => {
-      return '#' + color.replace(/^#/, '').match(/.{1,2}/g)!.map(c => Math.max(0, Math.min(255, parseInt(c, 16) + amount)).toString(16).padStart(2, '0')).join('');
-  }
   
   // Theme Update Effect
   useEffect(() => {

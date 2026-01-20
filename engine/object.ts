@@ -347,5 +347,6 @@ export function createMesh(engine: Engine, objData: SceneObject): THREE.Object3D
         mesh = new THREE.Mesh(new THREE.SphereGeometry(0.5), new THREE.MeshBasicMaterial({ color: 'red' }));
     }
     
+    mesh.userData.id = objData.id;
     return mesh;
   }

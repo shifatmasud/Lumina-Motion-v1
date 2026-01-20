@@ -14,12 +14,19 @@ export const useEngine = (
     const prevTimeRef = useRef(0);
     const [engineInstance, setEngineInstance] = useState<Engine | null>(null);
 
-    // Engine Init
+    // Engine Init & Cleanup
     useEffect(() => {
         if (containerRef.current && !engineRef.current) {
             const engine = new Engine(containerRef.current, onSelectObject);
             engineRef.current = engine;
             setEngineInstance(engine);
+        }
+
+        return () => {
+            if (engineRef.current) {
+                engineRef.current.dispose();
+                engineRef.current = null;
+            }
         }
     }, [onSelectObject]);
 

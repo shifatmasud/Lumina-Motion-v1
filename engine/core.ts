@@ -36,6 +36,9 @@ export class Engine {
   
   onSelect?: (id: string | null) => void;
 
+  private boundOnResize: () => void;
+  private boundOnPointerDown: (event: PointerEvent) => void;
+
   constructor(container: HTMLElement, onSelect?: (id: string | null) => void) {
     this.container = container;
     this.onSelect = onSelect;
@@ -105,8 +108,10 @@ export class Engine {
     this.controls.addEventListener('start', () => { this.isUserControllingCamera = true; });
 
     // Events
-    window.addEventListener('resize', this.onResize.bind(this));
-    this.renderer.domElement.addEventListener('pointerdown', this.onPointerDown.bind(this));
+    this.boundOnResize = this.onResize.bind(this);
+    this.boundOnPointerDown = this.onPointerDown.bind(this);
+    window.addEventListener('resize', this.boundOnResize);
+    this.renderer.domElement.addEventListener('pointerdown', this.boundOnPointerDown);
     
     this.animate();
   }
@@ -140,15 +145,15 @@ export class Engine {
       let foundId: string | null = null;
       
       while(selected) {
-         for (const [id, obj] of this.objectsMap.entries()) {
-             if (obj === selected) {
-                 foundId = id;
-                 break;
-             }
+         if (selected.userData.id && this.objectsMap.has(selected.userData.id)) {
+            foundId = selected.userData.id;
+            break;
          }
-         if (foundId) break;
-         if (selected.parent) selected = selected.parent;
-         else break;
+         if (selected.parent) {
+             selected = selected.parent;
+         } else {
+             break;
+         }
       }
 
       if (this.onSelect) this.onSelect(foundId);
@@ -318,6 +323,24 @@ export class Engine {
   }
 
   dispose() {
+      window.removeEventListener('resize', this.boundOnResize);
+      this.renderer.domElement.removeEventListener('pointerdown', this.boundOnPointerDown);
+
+      this.scene.traverse(object => {
+          if (object instanceof THREE.Mesh) {
+              if (object.geometry) object.geometry.dispose();
+              if (Array.isArray(object.material)) {
+                  object.material.forEach(material => material.dispose());
+              } else if (object.material) {
+                  object.material.dispose();
+              }
+          }
+      });
+      
       this.renderer.dispose();
+
+      if (this.container && this.renderer.domElement.parentNode === this.container) {
+          this.container.removeChild(this.renderer.domElement);
+      }
   }
 }
