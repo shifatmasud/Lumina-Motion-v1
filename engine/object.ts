@@ -314,7 +314,6 @@ export function createMesh(engine: Engine, objData: SceneObject): THREE.Object3D
             dirLight.shadow.camera.near = 0.5;
             dirLight.shadow.camera.far = 50;
             dirLight.shadow.bias = -0.0005; 
-            dirLight.shadow.blurSamples = 16;
             light = dirLight;
             helper = new THREE.DirectionalLightHelper(dirLight, 1);
         } else { // 'spot'
