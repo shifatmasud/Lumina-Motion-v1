@@ -1,4 +1,3 @@
-
 import { useRef, useEffect, useState } from 'react';
 import { Engine, SceneObject, GlobalSettings } from '../engine';
 
@@ -55,8 +54,8 @@ export const useEngine = (
             const parent = canvasContainer.parentElement;
             if (!parent) return;
             
-            const parentWidth = parent.clientWidth;
-            const parentHeight = parent.clientHeight;
+            const parentWidth = parent.clientWidth || window.innerWidth;
+            const parentHeight = parent.clientHeight || window.innerHeight;
 
             if (globalSettings.aspectRatio === 'free' || !globalSettings.aspectRatio) {
                 canvasContainer.style.width = '100%';
@@ -93,12 +92,19 @@ export const useEngine = (
         };
 
         applyAspectRatio();
-        const resizeObserver = new ResizeObserver(applyAspectRatio);
+        // Add a small delay for initial resize as parent clientRect might be 0 during fast mounts
+        const timer = setTimeout(applyAspectRatio, 100);
+
+        const resizeObserver = new ResizeObserver(() => {
+            requestAnimationFrame(applyAspectRatio);
+        });
+
         if (containerRef.current?.parentElement) {
             resizeObserver.observe(containerRef.current.parentElement);
         }
         
         return () => {
+            clearTimeout(timer);
             resizeObserver.disconnect();
         };
     }, [globalSettings.aspectRatio]);

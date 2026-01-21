@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
 import { DesignSystem } from './theme';
@@ -143,8 +142,8 @@ const App = () => {
   };
 
   return (
-    <div style={{ width: '100%', height: '100%', position: 'relative', overflow: 'hidden', background: DesignSystem.Color.Base.Surface[1] }}>
-      <div ref={containerRef} style={{ zIndex: 0 }} />
+    <div style={{ width: '100%', height: '100dvh', position: 'relative', overflow: 'hidden', background: DesignSystem.Color.Base.Surface[1] }}>
+      <div ref={containerRef} style={{ zIndex: 0, width: '100%', height: '100%' }} />
 
       <ExportModal
         isOpen={showExportModal}

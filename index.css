@@ -23,18 +23,20 @@
   -webkit-tap-highlight-color: transparent;
 }
 
-body {
-  font-family: var(--font-body);
-  background-color: #050505;
-  color: #e0e0e0;
-  overflow: hidden;
-  width: 100vw;
-  height: 100vh;
-}
-
-#root {
+html, body, #root {
   width: 100%;
   height: 100%;
+  width: 100dvw;
+  height: 100dvh;
+  overflow: hidden;
+  background-color: #050505;
+}
+
+body {
+  font-family: var(--font-body);
+  color: #e0e0e0;
+  position: fixed; /* Prevent rubber-banding on mobile */
+  touch-action: none;
 }
 
 /* Scrollbar Styling */
@@ -56,4 +58,8 @@ body {
 canvas {
   display: block;
   outline: none;
+}
+
+.window-header {
+  user-select: none;
 }

@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, Reorder, AnimatePresence, useDragControls, useMotionValue, useTransform } from 'framer-motion';
@@ -617,31 +616,33 @@ export const TimelineSequencer: React.FC<TimelineProps> = ({
 
     if (!timelineContainerRef.current) return;
     const scrollContainer = timelineContainerRef.current;
+    const scrollContainerRect = scrollContainer.getBoundingClientRect();
+    
+    // Check if the click is in the ruler's corner/header area
+    const relativeX = e.clientX - scrollContainerRect.left;
+    if (relativeX < trackHeaderWidth) return;
 
     isDraggingPlayhead.current = true;
     setIsScrubbing(true);
     if (isPlaying) onTogglePlay();
 
-    const handleInteraction = (event: PointerEvent) => {
-        const scrollContainerRect = scrollContainer.getBoundingClientRect();
-        const clickInContainer = event.clientX - scrollContainerRect.left;
+    const handleInteraction = (clientX: number) => {
+        const currentContainerRect = scrollContainer.getBoundingClientRect();
+        const clickInContainer = clientX - currentContainerRect.left;
         const contentX = scrollContainer.scrollLeft + clickInContainer;
         const timeAreaX = contentX - trackHeaderWidth;
 
         const newTime = Math.max(0, timeAreaX / pixelsPerSecond);
-        
         const finalTime = isSnappingEnabled ? Math.round(newTime / SNAP_INTERVAL) * SNAP_INTERVAL : newTime;
-
         const clampedTime = Math.min(finalTime, totalDuration);
         setCurrentTime(clampedTime);
     };
     
-    // Fix: The event from onPointerDown is a React.PointerEvent, which has `nativeEvent`. The subsequent `pointermove` events are native `PointerEvent`s. Using `e` directly would cause a type mismatch.
-    handleInteraction(e.nativeEvent as PointerEvent);
+    handleInteraction(e.clientX);
 
     const onPointerMove = (moveEvent: PointerEvent) => {
         if (isDraggingPlayhead.current) {
-            handleInteraction(moveEvent);
+            handleInteraction(moveEvent.clientX);
         }
     };
     
@@ -659,12 +660,12 @@ export const TimelineSequencer: React.FC<TimelineProps> = ({
 
   useEffect(() => {
       if (isPlaying && timelineContainerRef.current) {
-          const playheadX = currentTime * pixelsPerSecond;
+          const playheadXValue = currentTime * pixelsPerSecond;
           const container = timelineContainerRef.current;
           const center = container.clientWidth / 2;
           
-          if (playheadX > container.scrollLeft + center || playheadX < container.scrollLeft) {
-             container.scrollTo({ left: playheadX - center, behavior: 'auto' });
+          if (playheadXValue > container.scrollLeft + center || playheadXValue < container.scrollLeft) {
+             container.scrollTo({ left: playheadXValue - center, behavior: 'auto' });
           }
       }
   }, [currentTime, isPlaying, pixelsPerSecond]);
