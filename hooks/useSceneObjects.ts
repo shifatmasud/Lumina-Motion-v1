@@ -8,6 +8,7 @@ import { getFullKeyframeValuesAtTime, getInterpolatedValueAtTime } from '../util
 import { bakeScenePhysics, SimulationSettings } from '../utils/physics';
 
 type SetObjectsFn = (updater: React.SetStateAction<SceneObject[]>, isDebounced?: boolean) => void;
+type RequestManualPasteFn = (callback: (yaml: string) => void, title: string) => void;
 
 // This hook encapsulates all state and logic related to scene objects and their properties.
 export const useSceneObjects = (
@@ -15,6 +16,7 @@ export const useSceneObjects = (
     setObjects: SetObjectsFn,
     accentColor: string,
     setShowProperties: (show: boolean) => void,
+    requestManualPaste: RequestManualPasteFn,
 ) => {
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [selectedKeyframe, setSelectedKeyframe] = useState<{ id: string, index: number } | null>(null);
@@ -170,55 +172,58 @@ export const useSceneObjects = (
   
     const handlePasteValuesToSelectedKeyframeFromYaml = async () => {
         if (!selectedKeyframe || !selectedObject) return;
+
+        const applyYaml = (text: string) => {
+            try {
+                const parsedContent = yaml.load(text) as any;
+                if (typeof parsedContent !== 'object' || parsedContent === null || Array.isArray(parsedContent)) {
+                    throw new Error('Pasted content is not a valid keyframe object or values block.');
+                }
+    
+                const pastedData: Partial<TimelineKeyframe> = {};
+                if ('values' in parsedContent && typeof parsedContent.values === 'object') {
+                    pastedData.values = parsedContent.values;
+                    if ('name' in parsedContent) pastedData.name = parsedContent.name;
+                    if ('easing' in parsedContent) pastedData.easing = parsedContent.easing;
+                } else {
+                    pastedData.values = parsedContent;
+                }
+    
+                if (!pastedData.values) {
+                    throw new Error("Pasted YAML does not contain a 'values' block or is not a values block itself.");
+                }
+                
+                setObjects(prev => prev.map(o => {
+                    if (o.id !== selectedObject.id) return o;
+                    
+                    const newAnims = [...o.animations];
+                    const keyframeIndex = selectedKeyframe.index;
+                    if (!newAnims[keyframeIndex]) return o;
+    
+                    const existingKeyframe = newAnims[keyframeIndex];
+                    const newValues = { ...existingKeyframe.values, ...pastedData.values };
+    
+                    newAnims[keyframeIndex] = {
+                        ...existingKeyframe,
+                        name: pastedData.name ?? existingKeyframe.name,
+                        easing: pastedData.easing ?? existingKeyframe.easing,
+                        values: newValues,
+                    };
+                    
+                    return { ...o, animations: newAnims };
+                }));
+            } catch (error) {
+                console.error('Failed to paste YAML:', error);
+                alert(`Error parsing YAML: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            }
+        };
+
         try {
             const text = await navigator.clipboard.readText();
-            const parsedContent = yaml.load(text) as any;
-            if (typeof parsedContent !== 'object' || parsedContent === null || Array.isArray(parsedContent)) {
-                throw new Error('Pasted content is not a valid keyframe object or values block.');
-            }
-
-            const pastedData: Partial<TimelineKeyframe> = {};
-            // Case 1: Pasted a full keyframe object { time, name, easing, values }
-            if ('values' in parsedContent && typeof parsedContent.values === 'object') {
-                pastedData.values = parsedContent.values;
-                if ('name' in parsedContent) pastedData.name = parsedContent.name;
-                if ('easing' in parsedContent) pastedData.easing = parsedContent.easing;
-            } 
-            // Case 2: Pasted just a values block { position, rotation, ... }
-            else {
-                pastedData.values = parsedContent;
-            }
-
-            if (!pastedData.values) {
-                throw new Error("Pasted YAML does not contain a 'values' block or is not a values block itself.");
-            }
-            
-            setObjects(prev => prev.map(o => {
-                if (o.id !== selectedObject.id) return o;
-                
-                const newAnims = [...o.animations];
-                const keyframeIndex = selectedKeyframe.index;
-                if (!newAnims[keyframeIndex]) return o;
-
-                const existingKeyframe = newAnims[keyframeIndex];
-                
-                // Merge values, don't just replace
-                const newValues = {
-                    ...existingKeyframe.values,
-                    ...pastedData.values,
-                };
-
-                newAnims[keyframeIndex] = {
-                    ...existingKeyframe,
-                    name: pastedData.name ?? existingKeyframe.name,
-                    easing: pastedData.easing ?? existingKeyframe.easing,
-                    values: newValues,
-                };
-                
-                return { ...o, animations: newAnims };
-            }));
+            applyYaml(text);
         } catch (error) {
-            console.error('Failed to paste YAML:', error);
+            console.warn('Clipboard read failed, falling back to manual paste.', error);
+            requestManualPaste(applyYaml, 'Paste Keyframe YAML');
         }
     };
   
@@ -233,16 +238,28 @@ export const useSceneObjects = (
     };
   
     const handlePasteAllKeyframesFromYaml = async (trackId: string) => {
+        const applyYaml = (text: string) => {
+            try {
+                const parsedKeyframes = yaml.load(text);
+                if (!Array.isArray(parsedKeyframes)) { throw new Error('Pasted content is not a valid keyframe array.'); }
+                
+                const isValid = parsedKeyframes.every(kf => typeof kf === 'object' && kf !== null && typeof kf.time === 'number' && typeof kf.values === 'object');
+                if (!isValid) { throw new Error('Pasted YAML is an array, but its items do not match the required keyframe structure.'); }
+    
+                setObjects(prev => prev.map(o => o.id !== trackId ? o : { ...o, animations: parsedKeyframes as TimelineKeyframe[] }));
+            } catch (error) {
+                console.error('Failed to paste all keyframes from YAML:', error);
+                alert(`Error parsing YAML: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            }
+        };
+
         try {
             const text = await navigator.clipboard.readText();
-            const parsedKeyframes = yaml.load(text);
-            if (!Array.isArray(parsedKeyframes)) { throw new Error('Pasted content is not a valid keyframe array.'); }
-            
-            const isValid = parsedKeyframes.every(kf => typeof kf === 'object' && kf !== null && typeof kf.time === 'number' && typeof kf.values === 'object');
-            if (!isValid) { throw new Error('Pasted YAML is an array, but its items do not match the required keyframe structure.'); }
-
-            setObjects(prev => prev.map(o => o.id !== trackId ? o : { ...o, animations: parsedKeyframes as TimelineKeyframe[] }));
-        } catch (error) { console.error('Failed to paste all keyframes from YAML:', error); }
+            applyYaml(text);
+        } catch (error) {
+            console.warn('Clipboard read failed, falling back to manual paste.', error);
+            requestManualPaste(applyYaml, 'Paste All Keyframes YAML');
+        }
     };
   
     const handleBakePhysics = (settings: SimulationSettings, currentTime: number) => {

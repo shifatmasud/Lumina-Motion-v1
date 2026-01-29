@@ -10,6 +10,7 @@ import { PropertiesPanel } from './components/Section/PropertiesPanel';
 import { ProjectSettingsPanel } from './components/Section/ProjectSettingsPanel';
 import { PhysicsPanel } from './components/Section/PhysicsPanel';
 import { ExportModal } from './components/Package/ExportModal';
+import { PasteYamlModal } from './components/Package/PasteYamlModal';
 import { createYamlString } from './utils/yamlExporter';
 import { SimulationSettings } from './utils/physics';
 import { INITIAL_OBJECTS, INITIAL_GLOBAL_SETTINGS, DEFAULT_ACCENT_COLOR } from './constants';
@@ -62,7 +63,18 @@ const App = () => {
     showProjectSettings, setShowProjectSettings, showPhysicsPanel, setShowPhysicsPanel, showExportModal, setShowExportModal
   } = useUIState();
 
-  const scene = useSceneObjects(objects, setObjects, accentColor, setShowProperties);
+  // --- Paste Modal State & Handler ---
+  const [pasteModalState, setPasteModalState] = useState<{
+    isOpen: boolean;
+    onPaste: ((yaml: string) => void) | null;
+    title: string;
+  }>({ isOpen: false, onPaste: null, title: '' });
+
+  const requestManualPaste = (callback: (yaml: string) => void, title: string) => {
+    setPasteModalState({ isOpen: true, onPaste: callback, title });
+  };
+
+  const scene = useSceneObjects(objects, setObjects, accentColor, setShowProperties, requestManualPaste);
   const { selectedObject, selectedKeyframe, handleBakePhysics, handleUpdateObject } = scene;
   
   const playback = usePlayback(objects);
@@ -151,6 +163,18 @@ const App = () => {
         engine={engine}
         objects={objects}
         totalDuration={totalDuration}
+      />
+
+      <PasteYamlModal
+        isOpen={pasteModalState.isOpen}
+        title={pasteModalState.title}
+        onClose={() => setPasteModalState({ isOpen: false, onPaste: null, title: '' })}
+        onPaste={(yaml) => {
+            if (pasteModalState.onPaste) {
+              pasteModalState.onPaste(yaml);
+            }
+            setPasteModalState({ isOpen: false, onPaste: null, title: '' });
+        }}
       />
 
       <Window 
