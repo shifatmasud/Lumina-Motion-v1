@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import yaml from 'js-yaml';
@@ -173,23 +172,49 @@ export const useSceneObjects = (
         if (!selectedKeyframe || !selectedObject) return;
         try {
             const text = await navigator.clipboard.readText();
-            const parsedKeyframe = yaml.load(text) as any;
-            if (typeof parsedKeyframe !== 'object' || parsedKeyframe === null || Array.isArray(parsedKeyframe)) { throw new Error('Pasted content is not a valid keyframe object.'); }
-            
-            const updates: Partial<TimelineKeyframe> = {};
-            if ('values' in parsedKeyframe && typeof parsedKeyframe.values === 'object') {
-                updates.values = parsedKeyframe.values as TimelineKeyframe['values'];
-                if ('name' in parsedKeyframe) updates.name = parsedKeyframe.name as string;
-                if ('easing' in parsedKeyframe) updates.easing = parsedKeyframe.easing as string;
-            } else {
-                updates.values = parsedKeyframe as TimelineKeyframe['values'];
+            const parsedContent = yaml.load(text) as any;
+            if (typeof parsedContent !== 'object' || parsedContent === null || Array.isArray(parsedContent)) {
+                throw new Error('Pasted content is not a valid keyframe object or values block.');
             }
 
+            const pastedData: Partial<TimelineKeyframe> = {};
+            // Case 1: Pasted a full keyframe object { time, name, easing, values }
+            if ('values' in parsedContent && typeof parsedContent.values === 'object') {
+                pastedData.values = parsedContent.values;
+                if ('name' in parsedContent) pastedData.name = parsedContent.name;
+                if ('easing' in parsedContent) pastedData.easing = parsedContent.easing;
+            } 
+            // Case 2: Pasted just a values block { position, rotation, ... }
+            else {
+                pastedData.values = parsedContent;
+            }
+
+            if (!pastedData.values) {
+                throw new Error("Pasted YAML does not contain a 'values' block or is not a values block itself.");
+            }
+            
             setObjects(prev => prev.map(o => {
                 if (o.id !== selectedObject.id) return o;
+                
                 const newAnims = [...o.animations];
-                if (!newAnims[selectedKeyframe.index]) return o;
-                newAnims[selectedKeyframe.index] = { ...newAnims[selectedKeyframe.index], ...updates };
+                const keyframeIndex = selectedKeyframe.index;
+                if (!newAnims[keyframeIndex]) return o;
+
+                const existingKeyframe = newAnims[keyframeIndex];
+                
+                // Merge values, don't just replace
+                const newValues = {
+                    ...existingKeyframe.values,
+                    ...pastedData.values,
+                };
+
+                newAnims[keyframeIndex] = {
+                    ...existingKeyframe,
+                    name: pastedData.name ?? existingKeyframe.name,
+                    easing: pastedData.easing ?? existingKeyframe.easing,
+                    values: newValues,
+                };
+                
                 return { ...o, animations: newAnims };
             }));
         } catch (error) {
